@@ -9,6 +9,10 @@ use App\Models\Setting;
 
 function markSuspended(): void
 {
+    // config('sikampus.managed') true = mensimulasikan tenant Cloud -- default lingkungan
+    // test (dan default instalasi self-hosted sungguhan) adalah false, lihat grup test
+    // "instalasi self-hosted" di bawah untuk kasus sebaliknya.
+    config(['sikampus.managed' => true]);
     Setting::create(['key' => 'app_license_status', 'value' => 'suspended']);
     Setting::create(['key' => 'app_license_message', 'value' => 'Layanan Sikampus Cloud sedang dihentikan sementara (uji coba).']);
 }
@@ -63,4 +67,21 @@ it('tidak memblokir endpoint partner.api.key walau langganan suspended', functio
     $this->withHeader('X-API-Key', 'test-key')
         ->get('/api/partner/ping')
         ->assertOk();
+});
+
+// Instalasi self-hosted (berbayar maupun gratis): notifikasi/blokir subscription tidak
+// pernah relevan sama sekali, terlepas isi tabel settings -- lihat docblock
+// App\Services\SubscriptionStatus.
+
+it('tidak memblokir instalasi self-hosted sama sekali walau tabel settings-nya bilang suspended', function () {
+    // SENGAJA TANPA config(['sikampus.managed' => true]) -- default false persis seperti
+    // instalasi self-hosted sungguhan, walau baris settings-nya (mis. sisa migrasi/restore
+    // dari Cloud) tetap bilang 'suspended'.
+    Setting::create(['key' => 'app_license_status', 'value' => 'suspended']);
+    Setting::create(['key' => 'app_license_message', 'value' => 'Layanan Sikampus Cloud sedang dihentikan sementara (uji coba).']);
+
+    $admin = adminUser();
+
+    $this->get(route('login'))->assertOk();
+    $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
 });

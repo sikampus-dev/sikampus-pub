@@ -35,6 +35,16 @@ return [
 
     'version' => $version !== '' ? $version : 'dev',
 
+    // True HANYA untuk tenant yang di-deploy & dikelola lewat Sikampus Cloud (ditulis ke .env
+    // tenant sebagai SIKAMPUS_MANAGED=true oleh TenantProcessEnvironment di sikampus-web saat
+    // provisioning) -- instalasi self-hosted (berbayar maupun gratis) TIDAK PERNAH punya key
+    // ini di .env-nya. Dibaca lewat config di sini (bukan env() langsung di tempat pakainya)
+    // supaya tetap benar setelah `config:cache` -- env() di luar berkas config kembali null
+    // begitu config di-cache karena .env tidak lagi dibaca sama sekali. Dipakai App\Services\
+    // SubscriptionStatus sebagai gerbang utama: notifikasi/blokir grace period HANYA relevan
+    // untuk tenant Cloud.
+    'managed' => filter_var(env('SIKAMPUS_MANAGED', false), FILTER_VALIDATE_BOOLEAN),
+
     /*
     |--------------------------------------------------------------------------
     | Cek Pembaruan

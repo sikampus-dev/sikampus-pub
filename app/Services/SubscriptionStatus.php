@@ -25,6 +25,16 @@ use Throwable;
  * lama yang belum pernah disentuh portal (dideploy sebelum fitur ini ada), dan instalasi
  * self-hosted yang tidak pernah terhubung ke Sikampus Cloud sama sekali. Ketiadaan data TIDAK
  * BOLEH memblokir siapa pun; hanya status 'suspended' yang eksplisit yang memblokir.
+ *
+ * GERBANG UTAMA: seluruh mekanisme ini (banner grace, blokir suspended) HANYA berlaku untuk
+ * instalasi Sikampus Cloud (config('sikampus.managed') true — lihat config/sikampus.php).
+ * Instalasi self-hosted, BERBAYAR MAUPUN GRATIS, tidak pernah dikenai apa pun di sini,
+ * dipaksa 'active' terlepas dari isi tabel settings sama sekali — bukan cuma karena portal
+ * tidak pernah menulis ke sana (lihat App\Services\TenantLicenseStatusWriter di sikampus-web,
+ * yang memang sudah melewatkan installation non-Cloud-managed), tapi sebagai jaring pengaman
+ * kedua: baris app_license_status yang KEBETULAN ada di database self-hosted (mis. hasil
+ * restore dari snapshot Cloud, migrasi manual campus dari Cloud ke self-hosted, atau testing)
+ * tidak boleh salah memicu banner/blokir pada instalasi yang bukan lagi/bukan pernah Cloud.
  */
 class SubscriptionStatus
 {
@@ -44,6 +54,12 @@ class SubscriptionStatus
 
     public static function load(): self
     {
+        if (! config('sikampus.managed')) {
+            // Instalasi self-hosted -- lihat docblock kelas ini. Tidak perlu (dan sengaja
+            // tidak) membaca tabel settings sama sekali untuk kasus ini.
+            return new self(status: 'active', expiresAt: null, graceEndsAt: null, message: null);
+        }
+
         $values = self::readSettings();
 
         return new self(

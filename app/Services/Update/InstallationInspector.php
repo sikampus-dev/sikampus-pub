@@ -32,7 +32,12 @@ class InstallationInspector
      */
     public function type(): string
     {
-        if (filter_var(env('SIKAMPUS_MANAGED', false), FILTER_VALIDATE_BOOLEAN)) {
+        // config('sikampus.managed'), BUKAN env('SIKAMPUS_MANAGED', ...) langsung -- env()
+        // di luar berkas config kembali null begitu `config:cache` dijalankan (.env tidak lagi
+        // dibaca sama sekali), yang berarti tenant Cloud yang benar-benar managed bisa salah
+        // terdeteksi sebagai TYPE_GIT/TYPE_ARCHIVE di produksi persis situasi yang
+        // dikhawatirkan docblock di atas.
+        if (config('sikampus.managed')) {
             return self::TYPE_MANAGED;
         }
 
