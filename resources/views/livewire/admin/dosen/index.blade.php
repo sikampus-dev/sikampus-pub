@@ -1,3 +1,9 @@
+@php
+    $initials = function (?string $nama) {
+        return collect(explode(' ', trim((string) $nama)))->filter()->map(fn ($p) => mb_strtoupper(mb_substr($p, 0, 1)))->take(2)->implode('') ?: '?';
+    };
+@endphp
+
 @section('title', 'Dosen — ' . config('app.name'))
 @section('header_title', 'Dosen')
 @section('header_subtitle', 'Data induk dosen')
@@ -69,6 +75,7 @@
             <table class="w-full text-left text-sm">
                 <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     <tr>
+                        <th class="px-4 py-3">Foto</th>
                         <th class="px-4 py-3">Nama</th>
                         <th class="px-4 py-3">Kode</th>
                         <th class="px-4 py-3">NIP / NIDN</th>
@@ -80,6 +87,15 @@
                 <tbody class="divide-y divide-neutral-100">
                     @forelse ($dosenList as $dosen)
                         <tr wire:key="dosen-{{ $dosen->id }}">
+                            <td class="px-4 py-3">
+                                @if ($dosen->foto)
+                                    <img src="{{ asset('storage/'.ltrim($dosen->foto, '/')) }}" alt="{{ $dosen->nama }}" class="h-10 w-10 rounded-full object-cover ring-1 ring-neutral-200" />
+                                @else
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-xs font-semibold text-neutral-900 ring-1 ring-neutral-200">
+                                        {{ $initials($dosen->nama) }}
+                                    </div>
+                                @endif
+                            </td>
                             <td class="px-4 py-3 font-medium text-neutral-900">
                                 {{ trim(($dosen->gelar_depan ? $dosen->gelar_depan.' ' : '').$dosen->nama.($dosen->gelar_belakang ? ', '.$dosen->gelar_belakang : '')) }}
                             </td>
@@ -120,7 +136,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-10 text-center text-neutral-500">Belum ada data dosen.</td>
+                            <td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada data dosen.</td>
                         </tr>
                     @endforelse
                 </tbody>

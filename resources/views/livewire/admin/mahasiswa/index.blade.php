@@ -1,4 +1,7 @@
 @php
+    $initials = function (?string $nama) {
+        return collect(explode(' ', trim((string) $nama)))->filter()->map(fn ($p) => mb_strtoupper(mb_substr($p, 0, 1)))->take(2)->implode('') ?: '?';
+    };
     $statusBadgeClass = function (?string $nama) {
         $nama = mb_strtolower(trim((string) $nama));
         return match (true) {
@@ -145,6 +148,7 @@
             <table class="w-full text-left text-sm">
                 <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     <tr>
+                        <th class="px-4 py-3">Foto</th>
                         <th class="px-4 py-3">Nama</th>
                         <th class="px-4 py-3">Prodi</th>
                         <th class="px-4 py-3">Kelas Mahasiswa</th>
@@ -156,6 +160,15 @@
                 <tbody class="divide-y divide-neutral-100">
                     @forelse ($mahasiswaList as $mhs)
                         <tr wire:key="mhs-{{ $mhs->id }}" class="{{ $mhs->trashed() ? 'bg-neutral-50 text-neutral-500' : '' }}">
+                            <td class="px-4 py-3">
+                                @if ($mhs->foto)
+                                    <img src="{{ asset('storage/'.ltrim($mhs->foto, '/')) }}" alt="{{ $mhs->nama }}" class="h-10 w-10 rounded-full object-cover ring-1 ring-neutral-200" />
+                                @else
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-xs font-semibold text-neutral-900 ring-1 ring-neutral-200">
+                                        {{ $initials($mhs->nama) }}
+                                    </div>
+                                @endif
+                            </td>
                             <td class="px-4 py-3">
                                 <div class="font-medium text-neutral-900">{{ $mhs->nama }}</div>
                                 <div class="text-xs text-neutral-500">{{ $mhs->nim ?? '—' }}</div>
@@ -216,7 +229,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-10 text-center text-neutral-500">Belum ada data mahasiswa.</td>
+                            <td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada data mahasiswa.</td>
                         </tr>
                     @endforelse
                 </tbody>
