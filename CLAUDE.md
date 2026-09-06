@@ -154,6 +154,38 @@ apa yang dipertahankan. [LocalChangeDetector](app/Services/Update/LocalChangeDet
 membandingkan instalasi terhadap manifest versi terpasang supaya penyesuaian lokal kampus
 diperingatkan lebih dulu, bukan dihapus diam-diam.
 
+### Wizard pemasangan (`/install`)
+
+Instalasi baru tidak lagi menuntut shell. [InstallController](app/Http/Controllers/Web/InstallController.php)
+memandu empat langkah: persyaratan → database → identitas & akun → pemasangan.
+
+Empat keputusan yang menopang alur ini, dan semuanya mudah dirusak tanpa sengaja:
+
+- **Rute installer WAJIB di luar grup `web`.** Ada di [routes/install.php](routes/install.php),
+  didaftarkan lewat `withRouting(then: ...)` di `bootstrap/app.php`. Grup `web` memuat
+  `EnsureAppIsInstalled` (yang mengalihkan ke wizard) dan memakai sesi berbasis database — kalau
+  installer ikut grup itu, wizard mengalihkan dirinya sendiri tanpa henti DAN sesinya mencoba
+  menulis ke database yang justru sedang dikonfigurasi. Ada jaring pengaman `routeIs('install.*')`
+  di middleware itu kalau seseorang memindahkannya kembali.
+- **`EnsureAppIsInstalled` di-*prepend*, bukan di-*append*.** Kalau di belakang, middleware auth
+  menang duluan dan pengunjung dilempar ke halaman login milik aplikasi yang databasenya belum ada.
+- **`PrepareInstallerEnvironment` harus berjalan sebelum `EncryptCookies`/`StartSession`.**
+  Dialah yang membuat `.env` dari `.env.example`, membuat `APP_KEY` (tanpa itu `EncryptCookies`
+  melempar exception sebelum satu baris wizard sempat dirender), dan memaksa sesi/cache ke berkas.
+- **Penanda terpasang** adalah `storage/app/installed.lock`
+  ([InstallationState](app/Support/Installer/InstallationState.php)). Kalau berkas itu tidak ada,
+  database diperiksa sekali: instalasi yang sudah berjalan sejak sebelum installer ini ada tidak
+  punya berkas kunci, dan tanpa pengadopsian itu mereka akan dilempar ke wizard pemasangan begitu
+  memperbarui versi — lalu ditawari menimpa `.env` di atas data kampus yang hidup.
+
+`/install` menjawab **404** begitu terpasang — bukan 403, yang justru mengonfirmasi endpoint-nya
+ada. Kunci ditulis SEBELUM layar selesai dirender, karena selama kunci belum ada siapa pun yang
+menemukan URL itu bisa menimpa `.env` dan membuat superadmin baru.
+
+Suite test memakai `InstallationState::markInstalled()` di `beforeEach` global
+([tests/Pest.php](tests/Pest.php)): tanpa itu, database kosong milik `RefreshDatabase` terbaca
+sebagai "belum terpasang" dan setiap request dialihkan ke wizard.
+
 ### Akun admin & seeder
 
 `DatabaseSeeder` HANYA berisi data referensi (agama, jenis kuliah, permission, dst.) dan aman

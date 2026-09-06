@@ -4,6 +4,7 @@ use App\Models\Dosen;
 use App\Models\Prodi;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Installer\InstallationState;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,12 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
+    // Seluruh suite menguji aplikasi yang SUDAH terpasang. Tanpa penanda ini,
+    // App\Http\Middleware\EnsureAppIsInstalled membaca database kosong milik RefreshDatabase
+    // sebagai "belum terpasang" dan mengalihkan setiap request ke wizard pemasangan — yang akan
+    // menggagalkan hampir semua test dengan sebab yang tidak ada hubungannya dengan yang diuji.
+    // Test installer sendiri menghapus penanda ini di beforeEach-nya masing-masing.
+    ->beforeEach(fn () => InstallationState::markInstalled())
     ->in('Feature');
 
 /*

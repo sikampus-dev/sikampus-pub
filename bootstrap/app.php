@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Middleware\EnforceImpersonationTimeout;
+use App\Http\Middleware\EnsureAppIsInstalled;
+use App\Http\Middleware\EnsureAppIsNotInstalled;
 use App\Http\Middleware\EnsurePanelPermission;
 use App\Http\Middleware\EnsurePartnerApiKey;
 use App\Http\Middleware\EnsureUserHasKeuanganAccess;
@@ -15,11 +17,19 @@ use App\Http\Middleware\EnsureUserIsMahasiswa;
 use App\Http\Middleware\EnsureUserIsMahasiswaWeb;
 use App\Http\Middleware\EnsureUserIsSuperadmin;
 use App\Http\Middleware\EnsureUserIsSuperadminWeb;
+use App\Http\Middleware\PrepareInstallerEnvironment;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Middleware\HandleCors;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -27,6 +37,13 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Rute wizard pemasangan sengaja didaftarkan di luar grup "web" — lihat
+        // routes/install.php untuk alasannya.
+        then: function (): void {
+            Route::middleware('install')
+                ->prefix('install')
+                ->group(base_path('routes/install.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Untuk request API yang belum login, jangan panggil route('login') (tidak ada di API)
@@ -43,6 +60,30 @@ return Application::configure(basePath: dirname(__DIR__))
         // Aktifkan middleware stateful API agar Sanctum bisa memproses
         // permintaan berbasis cookie (SPA) maupun bearer token.
         $middleware->statefulApi();
+
+        // Grup khusus wizard pemasangan. TIDAK memakai grup "web" karena grup itu memuat
+        // penjaga EnsureAppIsInstalled (yang akan mengalihkan installer ke dirinya sendiri) dan
+        // memakai sesi berbasis database — padahal database itulah yang sedang dikonfigurasi.
+        //
+        // Urutan penting: PrepareInstallerEnvironment harus berjalan SEBELUM EncryptCookies dan
+        // StartSession, karena ia yang membuat APP_KEY dan memaksa sesi ke berkas.
+        $middleware->group('install', [
+            PrepareInstallerEnvironment::class,
+            EncryptCookies::class,
+            AddQueuedCookiesToResponse::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            ValidateCsrfToken::class,
+            SubstituteBindings::class,
+            EnsureAppIsNotInstalled::class,
+        ]);
+
+        // Selama aplikasi belum terpasang, seluruh halaman biasa dialihkan ke wizard.
+        // DI DEPAN grup, bukan di belakang: kalau di belakang, middleware auth menang duluan dan
+        // pengunjung dilempar ke halaman login milik aplikasi yang databasenya belum ada.
+        $middleware->prependToGroup('web', [
+            EnsureAppIsInstalled::class,
+        ]);
 
         // Wizard pembaruan menyalakan mode pemeliharaan tepat sebelum menukar berkas aplikasi,
         // lalu MASIH perlu menjalankan langkah-langkah berikutnya (migrasi, bersihkan cache,

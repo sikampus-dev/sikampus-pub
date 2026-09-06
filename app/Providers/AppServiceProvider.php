@@ -7,6 +7,7 @@ use App\Models\Mahasiswa;
 use App\Models\Prodi;
 use App\Models\Semester;
 use App\Models\Setting;
+use App\Services\Installer\EnvWriter;
 use App\Support\Plugins\AdminNavRegistry;
 use App\Support\Plugins\DashboardWidgetRegistry;
 use App\Support\Plugins\PluginBootManager;
@@ -31,6 +32,12 @@ class AppServiceProvider extends ServiceProvider
         // View::composer('dashboard', ...) di boot() di bawah membacanya sekali
         // saat halaman dashboard dirender.
         $this->app->singleton(DashboardWidgetRegistry::class);
+
+        // EnvWriter menerima path lewat konstruktor, jadi tidak bisa di-resolve container tanpa
+        // binding ini. Didaftarkan sebagai binding (bukan dipanggil langsung lewat pabriknya di
+        // controller) supaya test bisa mengarahkannya ke berkas sementara — tanpa itu, test yang
+        // menyentuh jalur pemasangan akan menulis ke .env repo ini sendiri.
+        $this->app->bind(EnvWriter::class, fn () => EnvWriter::forApp());
 
         // Registry grup navbar top-level yang di-push plugin (lihat AdminNavRegistry)
         // — singleton dengan alasan sama seperti di atas: semua plugin push() ke
