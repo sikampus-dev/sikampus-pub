@@ -154,6 +154,30 @@ apa yang dipertahankan. [LocalChangeDetector](app/Services/Update/LocalChangeDet
 membandingkan instalasi terhadap manifest versi terpasang supaya penyesuaian lokal kampus
 diperingatkan lebih dulu, bukan dihapus diam-diam.
 
+### Akun admin & seeder
+
+`DatabaseSeeder` HANYA berisi data referensi (agama, jenis kuliah, permission, dst.) dan aman
+dijalankan di produksi. Akun pengguna sengaja tidak ada di sana.
+
+Sampai sebelumnya seeder itu memanggil `UserSeeder`, `PmbUserSeeder`, dan `AssignRoleSeeder`,
+yang membuat **admin@gmail.com / Admin123!@#** dan memberinya role Superadmin. Repo ini publik
+dan seeder-nya ikut ke dalam setiap zip rilis, jadi kredensial itu bisa dibaca siapa pun lalu
+dicoba di instalasi kampus mana pun — dan karena `migrate --seed` adalah langkah pemasangan
+normal (juga yang dijalankan deploy engine Sikampus Cloud), setiap instalasi otomatis
+membawanya. **Jangan pernah mengembalikan seeder akun ke `DatabaseSeeder`**; ada test yang
+menjaga ini di [CreateAdminCommandTest](tests/Feature/CreateAdminCommandTest.php).
+
+Akun contoh untuk pengembangan lokal ada di `DemoAccountsSeeder`, yang harus dipanggil secara
+sadar dan **menolak berjalan di luar environment `local`** — penjagaannya di kode, bukan di
+dokumentasi, karena `db:seed --class=...` bisa dijalankan di produksi tanpa disadari.
+
+Akun admin pertama dibuat lewat
+[`php artisan sikampus:create-admin`](app/Console/Commands/CreateAdmin.php). Dipakai tiga jalur:
+pemasangan manual, wizard installer web (nanti), dan deploy engine Cloud yang menjalankannya di
+dalam direktori tenant. Password bisa diberikan lewat `--password` atau environment
+`SIKAMPUS_ADMIN_PASSWORD`, dan **sistem lain WAJIB memakai environment**: argumen proses masuk
+ke argv yang bisa dibaca semua user lokal lewat `/proc`.
+
 ### Pest test helpers (`tests/Pest.php`)
 
 - `adminUser(string $legacyRole = 'admin')` — creates a `User` with the legacy `role` column set,
