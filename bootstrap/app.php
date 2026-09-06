@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureAppIsInstalled;
 use App\Http\Middleware\EnsureAppIsNotInstalled;
 use App\Http\Middleware\EnsurePanelPermission;
 use App\Http\Middleware\EnsurePartnerApiKey;
+use App\Http\Middleware\EnsureSubscriptionActive;
 use App\Http\Middleware\EnsureUserHasKeuanganAccess;
 use App\Http\Middleware\EnsureUserHasSuperadminAccess;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -81,8 +82,14 @@ return Application::configure(basePath: dirname(__DIR__))
         // Selama aplikasi belum terpasang, seluruh halaman biasa dialihkan ke wizard.
         // DI DEPAN grup, bukan di belakang: kalau di belakang, middleware auth menang duluan dan
         // pengunjung dilempar ke halaman login milik aplikasi yang databasenya belum ada.
+        //
+        // EnsureSubscriptionActive TETAP setelah EnsureAppIsInstalled (bukan lebih depan lagi):
+        // status langganan tidak relevan sama sekali sebelum aplikasi terpasang. Lihat
+        // App\Http\Middleware\EnsureSubscriptionActive untuk kenapa ini SENGAJA mencakup rute
+        // login sekalipun (blokir "semua pengguna", bukan cuma yang sudah masuk).
         $middleware->prependToGroup('web', [
             EnsureAppIsInstalled::class,
+            EnsureSubscriptionActive::class,
         ]);
 
         // Wizard pembaruan menyalakan mode pemeliharaan tepat sebelum menukar berkas aplikasi,
@@ -133,6 +140,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role.dosen.web' => EnsureUserIsDosenWeb::class,
             'partner.api.key' => EnsurePartnerApiKey::class,
             'superadmin.web' => EnsureUserIsSuperadminWeb::class,
+            // Dipasang eksplisit di dalam grup auth:sanctum (routes/api.php), BUKAN lewat
+            // $middleware->api(...) di sini -- itu akan ikut membungkus grup partner.api.key
+            // juga, yang justru harus dikecualikan (integrasi sistem-ke-sistem, bukan
+            // "pengguna" — lihat docblock EnsureSubscriptionActive).
+            'subscription.active' => EnsureSubscriptionActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

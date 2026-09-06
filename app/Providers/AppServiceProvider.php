@@ -8,6 +8,7 @@ use App\Models\Prodi;
 use App\Models\Semester;
 use App\Models\Setting;
 use App\Services\Installer\EnvWriter;
+use App\Services\SubscriptionStatus;
 use App\Support\Plugins\AdminNavRegistry;
 use App\Support\Plugins\DashboardWidgetRegistry;
 use App\Support\Plugins\PluginBootManager;
@@ -148,6 +149,18 @@ class AppServiceProvider extends ServiceProvider
             $semesterAktif = Semester::where('is_active', true)->whereNull('deleted_at')->value('nama');
 
             $view->with('semesterAktif', $semesterAktif);
+        });
+
+        // Banner peringatan masa tenggang (grace period) lisensi Sikampus Cloud -- lihat
+        // App\Services\SubscriptionStatus & resources/views/partials/subscription-grace-banner.
+        // HANYA di panel admin (layouts.web), sesuai requirement asli "banner di admin Sikampus"
+        // -- tidak ditambahkan ke layouts.dosen/mahasiswa/prodi. Null (bukan cuma false) saat
+        // status BUKAN 'grace', supaya partial-nya bisa `@if ($subscriptionGrace ?? null)` tanpa
+        // perlu tahu bentuk objeknya kalau tidak ada apa-apa yang perlu ditampilkan.
+        View::composer('layouts.web', function ($view): void {
+            $subscription = SubscriptionStatus::load();
+
+            $view->with('subscriptionGrace', $subscription->isGrace() ? $subscription : null);
         });
 
         // Sidebar dosen (layouts.dosen) butuh kode_dosen & status kaprodi/sekprodi untuk tombol

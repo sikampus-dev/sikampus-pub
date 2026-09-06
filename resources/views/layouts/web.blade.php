@@ -27,6 +27,7 @@
 </head>
 <body class="min-h-screen bg-white text-neutral-900 antialiased">
 @include('partials.impersonate-banner')
+@include('partials.subscription-grace-banner')
 @php
     // Panel admin (Livewire) punya dashboard & logout sendiri; dosen/mahasiswa masing-masing
     // punya dashboard sendiri tapi berbagi mekanisme logout generik dengan panel maintenance

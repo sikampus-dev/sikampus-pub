@@ -114,7 +114,11 @@ Route::middleware('partner.api.key')->prefix('partner')->group(function (): void
     Route::get('semester/{semester}', [SemesterController::class, 'show']);
 });
 
-Route::middleware('auth:sanctum')->group(function (): void {
+// 'subscription.active' di sini (BUKAN cuma di grup 'web') supaya klien API mana pun selain
+// panel Blade/Livewire ini (mis. aplikasi mobile di masa depan) ikut diblokir saat tenant
+// suspended -- lihat App\Http\Middleware\EnsureSubscriptionActive. Grup partner.api.key di
+// atas SENGAJA tidak ikut disentuh (integrasi sistem-ke-sistem, bukan "pengguna").
+Route::middleware(['auth:sanctum', 'subscription.active'])->group(function (): void {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
