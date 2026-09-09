@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Setting;
 use App\Models\UpdateRun;
 use App\Services\Update\InstallationInspector;
 use Illuminate\Support\Facades\Cache;
@@ -13,15 +14,28 @@ beforeEach(function () {
         'sikampus_server.url' => '',
     ]);
 
-    Http::fake(['api.github.com/*' => Http::response([
-        'tag_name' => 'v1.2.0',
-        'name' => 'Sikampus v1.2.0',
-        'body' => 'Catatan.',
-        'assets' => [
-            ['name' => 'sikampus-1.2.0.zip', 'browser_download_url' => 'https://example.test/z.zip'],
-            ['name' => 'sikampus-1.2.0.zip.sha256', 'browser_download_url' => 'https://example.test/z.sha256'],
-        ],
-    ])]);
+    // Sejak pembaruan menuntut license key yang dikenali platform, sebagian besar test di
+    // berkas ini perlu instalasi berlisensi. Yang menguji gerbangnya sendiri menimpa ini.
+    Setting::updateOrCreate(['key' => 'app_license_key'], ['value' => 'KEY-BENAR']);
+    config(['sikampus_server.url' => 'https://app.sikampus.example']);
+
+    Http::fake([
+        // Menjawab berdasarkan KEY yang dikirim, bukan sekadar URL: Laravel memakai stub yang
+        // cocok PERTAMA, jadi stub per-URL di beforeEach akan selalu menang atas stub yang
+        // dipasang di dalam test — dan test "key tidak dikenali" tidak akan pernah jalan.
+        'app.sikampus.example/api/licenses/verify' => fn ($request) => $request['license_key'] === 'KEY-BENAR'
+            ? Http::response(['valid' => true])
+            : Http::response(['valid' => false], 404),
+        'api.github.com/*' => Http::response([
+            'tag_name' => 'v1.2.0',
+            'name' => 'Sikampus v1.2.0',
+            'body' => 'Catatan.',
+            'assets' => [
+                ['name' => 'sikampus-1.2.0.zip', 'browser_download_url' => 'https://example.test/z.zip'],
+                ['name' => 'sikampus-1.2.0.zip.sha256', 'browser_download_url' => 'https://example.test/z.sha256'],
+            ],
+        ]),
+    ]);
 });
 
 it('is reachable only by superadmin', function () {
@@ -128,4 +142,45 @@ it('refuses to update when the application directory is not writable', function 
         ->assertSessionHas('error');
 
     expect(UpdateRun::count())->toBe(0);
+});
+
+// Gerbang lisensi: pembaruan menuntut license key yang DIKENALI Sikampus Platform.
+// Pengecekan pembaruan sendiri tetap terbuka — instalasi tanpa lisensi tetap diberi tahu ada
+// versi baru, karena menyembunyikannya hanya membuat mereka tidak tahu sedang tertinggal.
+it('refuses to start an update when no license key is stored', function () {
+    Setting::where('key', 'app_license_key')->delete();
+
+    $this->actingAs(adminUser())
+        ->post(route('superadmin.pembaruan.mulai'), ['confirm' => '1'])
+        ->assertSessionHas('error');
+
+    expect(UpdateRun::count())->toBe(0);
+});
+
+it('refuses to start when the platform does not recognise the license key', function () {
+    Setting::updateOrCreate(['key' => 'app_license_key'], ['value' => 'KEY-SALAH']);
+
+    $this->actingAs(adminUser())
+        ->post(route('superadmin.pembaruan.mulai'), ['confirm' => '1'])
+        ->assertSessionHas('error');
+
+    expect(UpdateRun::count())->toBe(0);
+});
+
+it('starts the update once the platform confirms the license key', function () {
+    $this->actingAs(adminUser())
+        ->post(route('superadmin.pembaruan.mulai'), ['confirm' => '1'])
+        ->assertRedirect(route('superadmin.pembaruan'));
+
+    expect(UpdateRun::count())->toBe(1);
+});
+
+// Halaman harus memberi tahu syaratnya SEBELUM tombol ditekan, bukan menolak setelahnya.
+it('states the licence requirement on the start screen', function () {
+    Setting::where('key', 'app_license_key')->delete();
+
+    $this->actingAs(adminUser())
+        ->get(route('superadmin.pembaruan'))
+        ->assertOk()
+        ->assertSee('Pembaruan membutuhkan license key');
 });

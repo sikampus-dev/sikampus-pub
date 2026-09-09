@@ -141,6 +141,38 @@ Bentuk pengamanannya, dan alasan masing-masing:
 - Rute `pembaruan*` dikecualikan dari maintenance di `bootstrap/app.php`; tanpa itu, menyalakan
   maintenance mengunci halaman yang sedang menjalankan pembaruan.
 
+**Gerbang lisensi.** Menjalankan pembaruan menuntut license key yang **dikenali Sikampus
+Platform** ([LicenseGate](app/Services/Update/LicenseGate.php), memanggil
+`POST /api/licenses/verify` di portal). Gerbang ini dipasang di WIZARD WEB dan di PERINTAH CLI —
+kalau hanya di salah satunya, yang lain jadi jalan pintas.
+
+Yang TIDAK dibatasi: **pengecekan** pembaruan. Instalasi tanpa lisensi tetap diberi tahu ada
+versi baru; menyembunyikannya hanya membuat mereka tidak tahu sedang tertinggal.
+
+`LicenseGate` mengembalikan **tiga** keadaan gagal, bukan satu, dan pembedaannya penting:
+`MISSING` (belum diisi), `UNKNOWN` (ditolak platform), dan `UNREACHABLE` (platform tidak bisa
+dihubungi, atau menjawab 5xx, atau `SIKAMPUS_SERVER_URL` kosong). Ketiganya memblokir, tapi hanya
+`UNKNOWN` yang berarti ada masalah dengan lisensinya. Menyatukan `UNREACHABLE` ke dalam pesan
+"lisensi tidak valid" membuat kampus mengira lisensinya bermasalah padahal portal yang sedang
+mati — dan mereka akan mengganti-ganti key yang sebenarnya sudah benar.
+
+Verifikasi hanya memeriksa KEBERADAAN key, bukan masa berlakunya. Menahan pembaruan dari lisensi
+kedaluwarsa berarti menahan perbaikan keamanan juga, dan meninggalkan instalasi rentan yang tetap
+memakai nama Sikampus.
+
+Urutan penjagaan sengaja menaruh gerbang lisensi **paling akhir**: ia satu-satunya yang butuh
+jaringan, jadi pembaruan yang sudah tidak bisa jalan karena alasan lokal (Cloud-managed, tidak
+writable, sudah versi terbaru) tidak perlu membebani portal. Melanjutkan run yang tertunda tidak
+memeriksa ulang gerbang — pembaruan yang sudah berjalan tidak boleh terhenti di tengah hanya
+karena portal sedang mati.
+
+**Pelaporan setelah berhasil.** [UpdateReporter](app/Services/Update/UpdateReporter.php)
+mengirim license key + versi asal + versi tujuan ke `POST /api/installations/updated` di portal,
+dijalankan di langkah `finalize` setelah migrasi & cache beres tapi sebelum maintenance diangkat.
+Pelaporan **tidak pernah menggagalkan pembaruan**: di titik itu berkas sudah tertukar dan aplikasi
+sudah berjalan di versi baru, jadi melempar exception hanya akan menandai pembaruan yang berhasil
+sebagai gagal lalu membuat orang mengulanginya.
+
 [SikampusUpdate](app/Console/Commands/SikampusUpdate.php) (`php artisan sikampus:update`) adalah
 jalan darurat untuk wizard itu: request browser bisa mati di tengah langkah panjang di server
 dengan batas ketat, meninggalkan pembaruan berstatus `running` yang tidak ada yang melanjutkan.

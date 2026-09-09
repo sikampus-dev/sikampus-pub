@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\UpdateRun;
 use App\Services\Update\ArchiveUpdater;
 use App\Services\Update\InstallationInspector;
+use App\Services\Update\LicenseGate;
 use App\Services\Update\LocalChangeDetector;
 use App\Services\Update\ReleaseChecker;
 use App\Services\Update\UpdateRunner;
@@ -31,6 +32,7 @@ class SuperadminUpdateController extends Controller
         ReleaseChecker $checker,
         InstallationInspector $inspector,
         LocalChangeDetector $detector,
+        LicenseGate $gate,
     ): View {
         $run = UpdateRun::latest('id')->first();
         $check = $checker->latest();
@@ -43,10 +45,13 @@ class SuperadminUpdateController extends Controller
             'installed' => (string) config('sikampus.version'),
             'inspector' => $inspector,
             'changes' => $detector->detect(),
+            // Ditampilkan di layar mulai supaya syarat lisensi diketahui SEBELUM tombol ditekan,
+            // bukan muncul sebagai penolakan setelahnya.
+            'license' => $gate->check(),
         ]);
     }
 
-    public function start(Request $request, ReleaseChecker $checker, InstallationInspector $inspector): RedirectResponse
+    public function start(Request $request, ReleaseChecker $checker, InstallationInspector $inspector, LicenseGate $gate): RedirectResponse
     {
         $validated = $request->validate([
             // Jalur ditentukan server dari preflight, bukan diterima apa adanya dari form; nilai
@@ -72,6 +77,15 @@ class SuperadminUpdateController extends Controller
 
         if (! $inspector->isFullyWritable()) {
             return $this->back('Direktori aplikasi tidak bisa ditulis oleh PHP, sehingga pembaruan otomatis tidak dapat dijalankan.');
+        }
+
+        // Gerbang lisensi ditaruh PALING AKHIR di antara penjagaan: ia satu-satunya yang
+        // memerlukan jaringan, jadi tidak perlu membebani Sikampus Platform untuk pembaruan yang
+        // memang sudah tidak bisa jalan karena alasan lokal.
+        $license = $gate->check();
+
+        if ($license['state'] !== LicenseGate::ALLOWED) {
+            return $this->back($license['message']);
         }
 
         // Jalur Git dipakai kalau instalasi memang klon Git DAN ketiga binary tersedia; kalau

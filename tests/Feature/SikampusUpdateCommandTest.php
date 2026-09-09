@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Setting;
 use App\Models\UpdateRun;
 use App\Services\Update\InstallationInspector;
 use Illuminate\Support\Facades\Cache;
@@ -81,4 +82,49 @@ it('resumes an existing run instead of starting a new one', function () {
 
     expect(UpdateRun::count())->toBe(1);
     expect(UpdateRun::sole()->id)->toBe($run->id);
+});
+
+// Gerbang yang sama seperti di wizard web. Tanpa ini, perintah CLI jadi jalan pintas yang
+// melewati syarat lisensi sepenuhnya.
+it('refuses to update from the CLI when no license key is stored', function () {
+    fakeRelease();
+
+    $this->artisan('sikampus:update', ['--yes' => true])
+        ->expectsOutputToContain('membutuhkan license key')
+        ->assertFailed();
+
+    expect(UpdateRun::count())->toBe(0);
+});
+
+it('refuses from the CLI when the platform does not recognise the key', function () {
+    Setting::updateOrCreate(['key' => 'app_license_key'], ['value' => 'KEY-SALAH']);
+    config(['sikampus_server.url' => 'https://app.sikampus.example']);
+
+    Http::fake([
+        'app.sikampus.example/*' => Http::response(['valid' => false], 404),
+        'api.github.com/*' => Http::response(['tag_name' => 'v1.2.0', 'assets' => []]),
+    ]);
+
+    $this->artisan('sikampus:update', ['--yes' => true])
+        ->expectsOutputToContain('tidak dikenali')
+        ->assertFailed();
+
+    expect(UpdateRun::count())->toBe(0);
+});
+
+// Melanjutkan run yang tertunda TIDAK melewati gerbang lagi: gerbangnya di pembuatan run, dan
+// pembaruan yang sudah berjalan tidak boleh terhenti di tengah hanya karena portal sedang mati.
+it('resumes a pending run without re-checking the license', function () {
+    UpdateRun::create([
+        'version_from' => '1.0.0',
+        'version_to' => 'v1.2.0',
+        'path' => UpdateRun::PATH_ARCHIVE,
+        'status' => UpdateRun::STATUS_RUNNING,
+        'step' => 'download',
+    ]);
+
+    Http::fake(['*' => Http::response('', 500)]);
+
+    $this->artisan('sikampus:update', ['--yes' => true])
+        ->expectsOutputToContain('Melanjutkan pembaruan');
 });

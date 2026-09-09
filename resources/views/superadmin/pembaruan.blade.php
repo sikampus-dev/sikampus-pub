@@ -132,7 +132,27 @@
                         Tidak ada pembaruan yang perlu dijalankan.
                     </p>
                 @else
-                    @if ($blockers)
+                    @if ($license['state'] !== \App\Services\Update\LicenseGate::ALLOWED)
+                        {{-- Ditampilkan SEBELUM tombol, bukan sebagai penolakan setelah ditekan. --}}
+                        <div class="mt-5 rounded-lg border px-4 py-3 text-sm
+                            {{ $license['state'] === \App\Services\Update\LicenseGate::UNREACHABLE
+                                ? 'border-amber-100 bg-amber-50 text-amber-900'
+                                : 'border-red-100 bg-red-50 text-red-900' }}">
+                            <p class="font-medium">
+                                {{ $license['state'] === \App\Services\Update\LicenseGate::MISSING
+                                    ? 'Pembaruan membutuhkan license key.'
+                                    : ($license['state'] === \App\Services\Update\LicenseGate::UNKNOWN
+                                        ? 'License key tidak dikenali.'
+                                        : 'License key belum bisa diverifikasi.') }}
+                            </p>
+                            <p class="mt-1">{{ $license['message'] }}</p>
+                            @if ($license['state'] !== \App\Services\Update\LicenseGate::UNREACHABLE)
+                                <a href="{{ route('admin.sistem.lisensi') }}" class="mt-2 inline-block font-medium underline">
+                                    Buka halaman License Key
+                                </a>
+                            @endif
+                        </div>
+                    @elseif ($blockers)
                         <div class="mt-5 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-900">
                             <p class="font-medium">Pembaruan otomatis tidak bisa dijalankan.</p>
                             <p class="mt-1">PHP tidak punya izin tulis ke: <span class="font-mono text-xs">{{ implode(', ', $blockers) }}</span></p>

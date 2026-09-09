@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\UpdateRun;
 use App\Services\Update\InstallationInspector;
+use App\Services\Update\LicenseGate;
 use App\Services\Update\ReleaseChecker;
 use App\Services\Update\UpdateRunner;
 use Illuminate\Console\Command;
@@ -30,14 +31,14 @@ class SikampusUpdate extends Command
 
     protected $description = 'Perbarui Sikampus ke rilis terbaru, atau lanjutkan pembaruan yang tertunda';
 
-    public function handle(UpdateRunner $runner, ReleaseChecker $checker, InstallationInspector $inspector): int
+    public function handle(UpdateRunner $runner, ReleaseChecker $checker, InstallationInspector $inspector, LicenseGate $gate): int
     {
         $run = UpdateRun::where('status', UpdateRun::STATUS_RUNNING)->latest('id')->first();
 
         if ($run) {
             $this->info("Melanjutkan pembaruan {$run->version_from} → {$run->version_to} dari langkah \"{$run->step}\".");
         } else {
-            $run = $this->startNewRun($checker, $inspector);
+            $run = $this->startNewRun($checker, $inspector, $gate);
 
             if (! $run instanceof UpdateRun) {
                 return $run;
@@ -47,7 +48,7 @@ class SikampusUpdate extends Command
         return $this->runSteps($runner, $run);
     }
 
-    private function startNewRun(ReleaseChecker $checker, InstallationInspector $inspector): UpdateRun|int
+    private function startNewRun(ReleaseChecker $checker, InstallationInspector $inspector, LicenseGate $gate): UpdateRun|int
     {
         if ($inspector->type() === InstallationInspector::TYPE_MANAGED) {
             $this->error('Instalasi ini dikelola Sikampus Cloud; pembaruan dijalankan dari portal.');
@@ -78,6 +79,18 @@ class SikampusUpdate extends Command
             $this->info("Tidak ada pembaruan. Versi terpasang: {$installed}, versi terbaru: {$release->version}.");
 
             return self::SUCCESS;
+        }
+
+        // Gerbang yang sama seperti di wizard web — tanpa ini, perintah CLI jadi jalan pintas
+        // yang melewati syarat lisensi sepenuhnya. Ditaruh SETELAH pengecekan versi supaya
+        // instalasi yang sudah terbaru tidak dijawab "butuh license key" untuk pembaruan yang
+        // memang tidak ada.
+        $license = $gate->check();
+
+        if ($license['state'] !== LicenseGate::ALLOWED) {
+            $this->error($license['message']);
+
+            return self::FAILURE;
         }
 
         $path = $inspector->canUseGitPath() ? UpdateRun::PATH_GIT : UpdateRun::PATH_ARCHIVE;

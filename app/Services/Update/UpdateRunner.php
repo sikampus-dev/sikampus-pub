@@ -25,6 +25,7 @@ class UpdateRunner
         private readonly ArchiveUpdater $archive,
         private readonly GitUpdater $git,
         private readonly ReleaseChecker $checker,
+        private readonly UpdateReporter $reporter,
     ) {}
 
     /**
@@ -119,6 +120,11 @@ class UpdateRunner
         }
 
         $run->appendLog('Cache dibersihkan.');
+
+        // Dilaporkan SETELAH migrasi & cache beres tapi SEBELUM maintenance diangkat: kalau
+        // pelaporan lambat, pengunjung tetap melihat halaman pemeliharaan alih-alih aplikasi
+        // yang separuh siap. Pelaporan TIDAK PERNAH menggagalkan pembaruan — lihat UpdateReporter.
+        $run->appendLog($this->reporter->report($run));
 
         $this->leaveMaintenance($run);
 
