@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Admin\Pengguna\Index;
 use App\Livewire\Admin\Pengguna\Show;
 use App\Models\User;
 use Livewire\Livewire;
@@ -52,6 +53,51 @@ it('blocks a view-only staff member from deleting a user via the livewire method
         ->assertStatus(403);
 
     expect(User::find($target->id))->not->toBeNull();
+});
+
+it('blocks a view-only staff member from restoring or permanently deleting a user via the livewire methods directly', function () {
+    $admin = adminUser('admin_akademik');
+    $admin->givePermissionTo('view pengguna');
+    $target = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+    $target->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('restore', $target->id)
+        ->assertStatus(403);
+
+    expect(User::withTrashed()->find($target->id)->trashed())->toBeTrue();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $target->id)
+        ->assertStatus(403);
+});
+
+it('lets a staff member restore and permanently delete a user once granted manage pengguna', function () {
+    $admin = adminUser('admin_akademik');
+    $admin->givePermissionTo(['view pengguna', 'manage pengguna']);
+    $target = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+    $target->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('restore', $target->id);
+
+    expect(User::find($target->id))->not->toBeNull();
+
+    $target->refresh()->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $target->id)
+        ->call('forceDeleteUser');
+
+    expect(User::withTrashed()->find($target->id))->toBeNull();
 });
 
 it('denies access entirely to a staff member with no pengguna permission at all', function () {
