@@ -7,6 +7,7 @@ use App\Models\Dosen;
 use App\Models\Jadwal;
 use App\Models\JadwalDosen;
 use App\Models\Kelas;
+use App\Models\KelompokKelas;
 use App\Models\KurikulumMatkul;
 use App\Models\Matkul;
 use App\Models\Prodi;
@@ -69,6 +70,39 @@ it('lists every kelas matching the selected prodi and semester, not capped at 20
     $optionIds = collect($component->instance()->kelasOptions())->pluck('id');
     expect($optionIds)->toHaveCount(205);
     expect($optionIds->diff($kelasIds))->toBeEmpty();
+});
+
+it('includes the kelompok kelas name in the label so classes sharing a matkul and semester can be told apart', function () {
+    $admin = adminUser();
+    $semester = Semester::factory()->create();
+    $matkul = Matkul::factory()->create(['nama' => 'Pemrograman Web', 'kode' => 'IF101']);
+    $kurikulumMatkul = KurikulumMatkul::factory()->create(['id_matkul' => $matkul->id]);
+    $kelompokA = KelompokKelas::factory()->create(['nama' => 'Kelas A']);
+    $kelompokB = KelompokKelas::factory()->create(['nama' => 'Kelas B']);
+
+    // Regression: kode_matkul + nama_matkul + semester identik untuk kedua baris ini — tanpa nama
+    // kelompok kelas di label, keduanya tampil sama persis di dropdown dan tidak bisa dibedakan.
+    $kelasA = Kelas::factory()->create([
+        'id_kurikulum_matkul' => $kurikulumMatkul->id,
+        'id_semester' => $semester->id,
+        'id_kelompok_kelas' => $kelompokA->id,
+    ]);
+    $kelasB = Kelas::factory()->create([
+        'id_kurikulum_matkul' => $kurikulumMatkul->id,
+        'id_semester' => $semester->id,
+        'id_kelompok_kelas' => $kelompokB->id,
+    ]);
+
+    $options = Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->instance()
+        ->kelasOptions();
+
+    $labelById = $options->pluck('label', 'id');
+
+    expect($labelById[$kelasA->id])->toContain('Kelompok: Kelas A');
+    expect($labelById[$kelasB->id])->toContain('Kelompok: Kelas B');
+    expect($labelById[$kelasA->id])->not->toBe($labelById[$kelasB->id]);
 });
 
 it('creates several jadwal slots at once from jumlah_pertemuan', function () {
