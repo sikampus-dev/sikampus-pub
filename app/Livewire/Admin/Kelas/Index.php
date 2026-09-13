@@ -277,7 +277,12 @@ class Index extends Component
             'angkatan',
             'dosenPic',
             'kelompokKelas',
-        ]);
+        ])
+            // Kolom "Jumlah Pertemuan" di tabel dihitung dari baris Jadwal yang benar-benar ada
+            // (jadwal_count), BUKAN dari kelas.jml_pertemuan — kolom itu cuma target/rencana yang
+            // diisi manual saat kelas dibuat, bisa berbeda dari jumlah slot jadwal yang sungguhan
+            // terbentuk (mis. sebagian belum dibuat, atau dibuat lebih lewat import terpisah).
+            ->withCount('jadwal');
 
         if ($this->showTrashed) {
             $query->withTrashed();

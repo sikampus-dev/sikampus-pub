@@ -180,6 +180,76 @@
             </div>
         </div>
 
+        <div class="rounded-2xl bg-white p-6 shadow-border">
+            <div class="flex items-center gap-2">
+                <input type="checkbox" wire:model.live="buatJadwalOtomatis" id="buatJadwalOtomatis" class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10" />
+                <label for="buatJadwalOtomatis" class="text-base font-semibold text-neutral-900">Buat jadwal otomatis</label>
+            </div>
+            <p class="mt-1 text-xs text-neutral-500">Membuat sekaligus {{ $jml_pertemuan ?: 'N' }} slot pertemuan (mengikuti Jumlah Pertemuan di atas) untuk kelas ini, dengan dosen pengajar yang sama dengan Pengajar di atas (PIC + tim pengampu).</p>
+
+            @if ($buatJadwalOtomatis)
+                <div class="mt-4 grid grid-cols-1 gap-5 border-t border-neutral-100 pt-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Jenis Kuliah</label>
+                        <x-searchable-select
+                            model="jadwalIdJenisKuliah"
+                            :options="$jadwalJenisKuliahOptions"
+                            placeholder="— Opsional —"
+                        />
+                        @error('jadwalIdJenisKuliah') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Tanggal Mulai</label>
+                        <input type="date" wire:model="jadwalTanggal" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 @error('jadwalTanggal') ring-2 ring-red-500 @enderror shadow-border" />
+                        @error('jadwalTanggal') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-7">
+                        <input type="checkbox" wire:model="jadwalTanggalHariOtomatis" id="jadwalTanggalHariOtomatis" class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10" />
+                        <label for="jadwalTanggalHariOtomatis" class="text-sm font-medium text-neutral-700">Tanggal &amp; hari otomatis per minggu</label>
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Hari</label>
+                        <x-searchable-select
+                            model="jadwalHari"
+                            :options="$jadwalHariOptions"
+                            placeholder="— Opsional —"
+                        />
+                        @error('jadwalHari') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-7">
+                        <input type="checkbox" wire:model="jadwalIsActive" id="jadwalIsActive" class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10" />
+                        <label for="jadwalIsActive" class="text-sm font-medium text-neutral-700">Jadwal aktif</label>
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Jam Mulai</label>
+                        <input type="time" wire:model="jadwalJamMulai" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 @error('jadwalJamMulai') ring-2 ring-red-500 @enderror shadow-border" />
+                        @error('jadwalJamMulai') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Jam Selesai</label>
+                        <input type="time" wire:model="jadwalJamSelesai" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 @error('jadwalJamSelesai') ring-2 ring-red-500 @enderror shadow-border" />
+                        @error('jadwalJamSelesai') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Ruangan</label>
+                        <x-searchable-select
+                            model="jadwalIdRuangan"
+                            :options="$jadwalRuanganOptions"
+                            placeholder="— Opsional —"
+                        />
+                        @error('jadwalIdRuangan') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+            @endif
+        </div>
+
         <div class="flex items-center justify-end gap-3">
             <a href="{{ $backUrl }}" class="rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
                 Batal

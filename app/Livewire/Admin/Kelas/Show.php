@@ -20,6 +20,11 @@ class Show extends Component
 
     public bool $confirmingDelete = false;
 
+    /** @var array<int> id jadwal yang dicentang untuk dihapus massal — lihat bulkDeleteJadwal(). */
+    public array $selectedJadwalIds = [];
+
+    public bool $confirmingBulkDelete = false;
+
     public function mount(int $id): void
     {
         $this->kelasId = $id;
@@ -132,6 +137,66 @@ class Show extends Component
         session()->flash('status', 'Kelas dihapus.');
 
         return redirect()->route('admin.akademik.kelas');
+    }
+
+    /**
+     * Centang semua / kosongkan semua — aksi tombol tunggal yang membalik keadaan sekarang: kalau
+     * belum semua tercentang, centang semua; kalau sudah semua tercentang, kosongkan.
+     */
+    public function toggleAllJadwal(): void
+    {
+        $allIds = $this->jadwalList->pluck('id')->all();
+
+        if ($allIds !== [] && count($this->selectedJadwalIds) === count($allIds)) {
+            $this->selectedJadwalIds = [];
+        } else {
+            $this->selectedJadwalIds = $allIds;
+        }
+    }
+
+    public function confirmBulkDelete(): void
+    {
+        if ($this->selectedJadwalIds === []) {
+            return;
+        }
+
+        $this->confirmingBulkDelete = true;
+    }
+
+    public function cancelBulkDelete(): void
+    {
+        $this->confirmingBulkDelete = false;
+    }
+
+    /**
+     * Hapus (soft delete) semua jadwal yang tercentang sekaligus — sama seperti
+     * Jadwal\Index::delete() per baris, tapi untuk beberapa baris dalam satu aksi. id_kelas selalu
+     * ikut disaring supaya id jadwal yang (secara tidak wajar) bukan milik kelas ini tidak ikut
+     * terhapus lewat properti publik yang bisa dimanipulasi dari luar.
+     */
+    public function bulkDeleteJadwal(): void
+    {
+        if ($this->selectedJadwalIds === []) {
+            $this->confirmingBulkDelete = false;
+
+            return;
+        }
+
+        $kelas = Kelas::findOrFail($this->kelasId);
+        $this->ensureAccess($kelas);
+
+        $count = Jadwal::where('id_kelas', $this->kelasId)
+            ->whereIn('id', $this->selectedJadwalIds)
+            ->count();
+
+        Jadwal::where('id_kelas', $this->kelasId)
+            ->whereIn('id', $this->selectedJadwalIds)
+            ->delete();
+
+        $this->selectedJadwalIds = [];
+        $this->confirmingBulkDelete = false;
+
+        session()->flash('status', $count > 0 ? "{$count} jadwal berhasil dihapus." : 'Tidak ada jadwal yang dihapus.');
     }
 
     public function render()

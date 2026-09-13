@@ -115,6 +115,7 @@
                         <th class="px-4 py-3">Kel. Kelas</th>
                         <th class="px-4 py-3">Angkatan</th>
                         <th class="px-4 py-3">Sem. Kuliah</th>
+                        <th class="px-4 py-3 text-center">Jml. Pertemuan</th>
                         <th class="px-4 py-3">Dosen PIC</th>
                         <th class="px-4 py-3 text-center">Status</th>
                         <th class="px-4 py-3 text-right">Aksi</th>
@@ -141,6 +142,7 @@
                             <td class="px-4 py-3 text-neutral-600 tabular-nums">
                                 {{ $kelas->semester_kuliah_ke !== null ? "Ke-{$kelas->semester_kuliah_ke}" : '—' }}
                             </td>
+                            <td class="px-4 py-3 text-center text-neutral-600 tabular-nums">{{ $kelas->jadwal_count }}</td>
                             <td class="px-4 py-3 text-neutral-900">{{ $kelas->dosenPic?->nama ?? '—' }}</td>
                             <td class="px-4 py-3 text-center">
                                 @if ($kelas->trashed())
@@ -201,7 +203,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-10 text-center text-neutral-500">Belum ada data kelas.</td>
+                            <td colspan="9" class="px-4 py-10 text-center text-neutral-500">Belum ada data kelas.</td>
                         </tr>
                     @endforelse
                 </tbody>

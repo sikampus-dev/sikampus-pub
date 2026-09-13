@@ -4,6 +4,7 @@ use App\Livewire\Admin\Kelas\Form;
 use App\Livewire\Admin\Kelas\Index;
 use App\Livewire\Admin\Kelas\Show;
 use App\Models\Dosen;
+use App\Models\Jadwal;
 use App\Models\Jenjang;
 use App\Models\Kelas;
 use App\Models\KelasDosen;
@@ -12,6 +13,7 @@ use App\Models\Krs;
 use App\Models\KurikulumMatkul;
 use App\Models\Matkul;
 use App\Models\Prodi;
+use App\Models\Ruangan;
 use App\Models\Semester;
 use Livewire\Livewire;
 
@@ -63,6 +65,195 @@ it('creates, updates, and deletes a kelas', function () {
         ->call('delete');
 
     expect(Kelas::find($kelas->id))->toBeNull();
+});
+
+it('toggles select-all for jadwal rows on the show page, flipping based on current state', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwalIds = Jadwal::factory()->count(3)->create(['id_kelas' => $kelas->id])->pluck('id')->all();
+
+    $component = Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $kelas->id])
+        ->assertSet('selectedJadwalIds', [])
+        ->call('toggleAllJadwal');
+
+    expect($component->get('selectedJadwalIds'))->toEqualCanonicalizing($jadwalIds);
+
+    // Sudah semua tercentang — toggle lagi berarti mengosongkan, bukan menambah lagi.
+    $component->call('toggleAllJadwal')->assertSet('selectedJadwalIds', []);
+});
+
+it('bulk deletes only the checked jadwal rows, leaving the rest untouched', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwal1 = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    $jadwal2 = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    $jadwal3 = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $kelas->id])
+        ->set('selectedJadwalIds', [$jadwal1->id, $jadwal2->id])
+        ->call('confirmBulkDelete')
+        ->assertSet('confirmingBulkDelete', true)
+        ->call('bulkDeleteJadwal')
+        ->assertSet('confirmingBulkDelete', false)
+        ->assertSet('selectedJadwalIds', []);
+
+    expect(Jadwal::find($jadwal1->id))->toBeNull();
+    expect(Jadwal::find($jadwal2->id))->toBeNull();
+    expect(Jadwal::find($jadwal3->id))->not->toBeNull();
+});
+
+// selectedJadwalIds properti publik Livewire — bisa dimanipulasi lewat request langsung, jadi
+// harus tetap disaring ke id_kelas milik halaman ini, bukan dipercaya begitu saja.
+it('does not delete a jadwal belonging to a different kelas even if its id is smuggled into selectedJadwalIds', function () {
+    $admin = adminUser();
+    $kelasA = Kelas::factory()->create();
+    $kelasB = Kelas::factory()->create();
+    $jadwalA = Jadwal::factory()->create(['id_kelas' => $kelasA->id]);
+    $jadwalB = Jadwal::factory()->create(['id_kelas' => $kelasB->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $kelasA->id])
+        ->set('selectedJadwalIds', [$jadwalA->id, $jadwalB->id])
+        ->call('bulkDeleteJadwal');
+
+    expect(Jadwal::find($jadwalA->id))->toBeNull();
+    expect(Jadwal::find($jadwalB->id))->not->toBeNull();
+});
+
+it('does not open the bulk delete confirmation when nothing is checked', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $kelas->id])
+        ->call('confirmBulkDelete')
+        ->assertSet('confirmingBulkDelete', false);
+});
+
+it('does not create any jadwal when buatJadwalOtomatis is left off', function () {
+    $admin = adminUser();
+    $prodi = Prodi::factory()->create();
+    $kurikulumMatkul = KurikulumMatkul::factory()->create();
+    $semester = Semester::factory()->create();
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('id_prodi', $prodi->id)
+        ->set('id_kurikulum_matkul', $kurikulumMatkul->id)
+        ->set('id_semester', $semester->id)
+        ->set('id_angkatan', $semester->id)
+        ->call('save')
+        ->assertRedirect(route('admin.akademik.kelas'));
+
+    $kelas = Kelas::where('id_kurikulum_matkul', $kurikulumMatkul->id)->firstOrFail();
+    expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(0);
+});
+
+it('creates N jadwal slots with the kelas team as dosen when buatJadwalOtomatis is on at create time', function () {
+    $admin = adminUser();
+    $prodi = Prodi::factory()->create();
+    $kurikulumMatkul = KurikulumMatkul::factory()->create();
+    $semester = Semester::factory()->create();
+    $ruangan = Ruangan::factory()->create();
+    $pic = Dosen::factory()->create();
+    $tim = Dosen::factory()->create();
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('id_prodi', $prodi->id)
+        ->set('id_kurikulum_matkul', $kurikulumMatkul->id)
+        ->set('id_semester', $semester->id)
+        ->set('id_angkatan', $semester->id)
+        ->set('id_dosen_pic', $pic->id)
+        ->call('addDosenTim', $tim->id)
+        ->set('jml_pertemuan', '4')
+        ->set('buatJadwalOtomatis', true)
+        ->set('jadwalHari', 'senin')
+        ->set('jadwalJamMulai', '08:00')
+        ->set('jadwalJamSelesai', '10:00')
+        ->set('jadwalIdRuangan', $ruangan->id)
+        ->call('save')
+        ->assertRedirect(route('admin.akademik.kelas'));
+
+    $kelas = Kelas::where('id_kurikulum_matkul', $kurikulumMatkul->id)->firstOrFail();
+    $jadwalRows = Jadwal::where('id_kelas', $kelas->id)->orderBy('urutan_pertemuan')->get();
+
+    expect($jadwalRows)->toHaveCount(4);
+    expect($jadwalRows->pluck('urutan_pertemuan')->all())->toBe([1, 2, 3, 4]);
+    foreach ($jadwalRows as $jadwal) {
+        expect($jadwal->hari)->toBe('senin');
+        expect(substr((string) $jadwal->jam_mulai, 0, 5))->toBe('08:00');
+        expect($jadwal->id_ruangan)->toBe($ruangan->id);
+        // Dosen jadwal ikut tim dosen kelas (PIC + tim) — bukan dipilih terpisah.
+        expect($jadwal->dosen->pluck('id_dosen')->sort()->values()->all())->toBe(collect([$pic->id, $tim->id])->sort()->values()->all());
+    }
+});
+
+it('rejects saving the kelas when buatJadwalOtomatis fields are invalid, without partially saving anything', function () {
+    $admin = adminUser();
+    $prodi = Prodi::factory()->create();
+    $kurikulumMatkul = KurikulumMatkul::factory()->create();
+    $semester = Semester::factory()->create();
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('id_prodi', $prodi->id)
+        ->set('id_kurikulum_matkul', $kurikulumMatkul->id)
+        ->set('id_semester', $semester->id)
+        ->set('id_angkatan', $semester->id)
+        ->set('buatJadwalOtomatis', true)
+        ->set('jadwalJamMulai', '10:00')
+        ->set('jadwalJamSelesai', '08:00')
+        ->call('save')
+        ->assertHasErrors(['jadwalJamSelesai']);
+
+    expect(Kelas::where('id_kurikulum_matkul', $kurikulumMatkul->id)->exists())->toBeFalse();
+});
+
+it('lets an existing kelas generate jadwal on edit, but rejects it when a slot is already taken', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create(['jml_pertemuan' => 2]);
+    $ruangan = Ruangan::factory()->create();
+
+    // Slot pertemuan ke-1 untuk kombinasi kelas+ruangan ini sudah ada.
+    Jadwal::factory()->create(['id_kelas' => $kelas->id, 'urutan_pertemuan' => 1, 'id_ruangan' => $ruangan->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $kelas->id])
+        ->set('buatJadwalOtomatis', true)
+        ->set('jadwalIdRuangan', $ruangan->id)
+        ->call('save')
+        ->assertHasErrors(['jadwalIdRuangan']);
+
+    // Kelas tanpa ruangan yang sama tidak bentrok — berhasil membuat slot 1 & 2.
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $kelas->id])
+        ->set('buatJadwalOtomatis', true)
+        ->call('save')
+        ->assertRedirect(route('admin.akademik.kelas'));
+
+    expect(Jadwal::where('id_kelas', $kelas->id)->whereNull('id_ruangan')->count())->toBe(2);
+});
+
+it('shows the jumlah pertemuan column counting actual jadwal rows, not the jml_pertemuan target field', function () {
+    $admin = adminUser();
+    // jml_pertemuan (target rencana) sengaja dibuat BEDA dari jumlah Jadwal sungguhan — kolom
+    // index harus mengikuti yang sungguhan (2), bukan angka rencana ini (16).
+    $kelas = Kelas::factory()->create(['jml_pertemuan' => 16]);
+    Jadwal::factory()->count(2)->create(['id_kelas' => $kelas->id]);
+
+    // Jadwal soft-deleted tidak boleh ikut terhitung.
+    $trashedJadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    $trashedJadwal->delete();
+
+    $kelasList = Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->viewData('kelasList');
+
+    expect($kelasList->firstWhere('id', $kelas->id)->jadwal_count)->toBe(2);
 });
 
 it('rejects a duplicate kombinasi kurikulum matkul, semester, dan angkatan', function () {

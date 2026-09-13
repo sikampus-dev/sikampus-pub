@@ -137,7 +137,19 @@
     </div>
 
     <div class="rounded-2xl bg-white p-6 shadow-border">
-        <h2 class="mb-4 text-base font-semibold text-neutral-900">Jadwal</h2>
+        <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-base font-semibold text-neutral-900">Jadwal</h2>
+            @if (count($selectedJadwalIds) > 0)
+                <button
+                    type="button"
+                    wire:click="confirmBulkDelete"
+                    class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-rose-700"
+                >
+                    <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+                    Hapus Terpilih ({{ count($selectedJadwalIds) }})
+                </button>
+            @endif
+        </div>
         @if ($this->jadwalList->isEmpty())
             <p class="text-sm text-neutral-500">Belum ada jadwal.</p>
         @else
@@ -145,6 +157,15 @@
                 <table class="w-full text-left text-sm">
                     <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                         <tr>
+                            <th class="w-10 px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    wire:click="toggleAllJadwal"
+                                    @checked(count($selectedJadwalIds) > 0 && count($selectedJadwalIds) === $this->jadwalList->count())
+                                    class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
+                                    title="Centang semua"
+                                />
+                            </th>
                             <th class="px-4 py-3">Hari</th>
                             <th class="px-4 py-3">Waktu</th>
                             <th class="px-4 py-3">Ruangan</th>
@@ -155,6 +176,14 @@
                     <tbody class="divide-y divide-neutral-100">
                         @foreach ($this->jadwalList as $jadwal)
                             <tr wire:key="jadwal-{{ $jadwal->id }}">
+                                <td class="px-4 py-3">
+                                    <input
+                                        type="checkbox"
+                                        wire:model.live="selectedJadwalIds"
+                                        value="{{ $jadwal->id }}"
+                                        class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
+                                    />
+                                </td>
                                 <td class="px-4 py-3 text-neutral-900">{{ ucfirst($jadwal->hari ?? '—') }}</td>
                                 <td class="px-4 py-3 tabular-nums text-neutral-900 whitespace-nowrap">
                                     {{ $jadwal->jam_mulai && $jadwal->jam_selesai ? "{$jadwal->jam_mulai} – {$jadwal->jam_selesai}" : ($jadwal->jam_mulai ?? $jadwal->jam_selesai ?? '—') }}
@@ -182,6 +211,23 @@
                         Batal
                     </button>
                     <button type="button" wire:click="delete" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700">
+                        Hapus
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if ($confirmingBulkDelete)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 px-4">
+            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-border-lg">
+                <h3 class="text-base font-semibold text-neutral-900">Hapus {{ count($selectedJadwalIds) }} jadwal terpilih?</h3>
+                <p class="mt-2 text-sm text-neutral-600">Tindakan ini tidak dapat dibatalkan.</p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" wire:click="cancelBulkDelete" class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
+                        Batal
+                    </button>
+                    <button type="button" wire:click="bulkDeleteJadwal" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700">
                         Hapus
                     </button>
                 </div>

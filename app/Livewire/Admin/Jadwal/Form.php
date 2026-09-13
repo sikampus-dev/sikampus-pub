@@ -11,7 +11,7 @@ use App\Models\Kelas;
 use App\Models\Prodi;
 use App\Models\Ruangan;
 use App\Models\Semester;
-use Carbon\Carbon;
+use App\Services\JadwalBatchGenerator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -236,16 +236,6 @@ class Form extends Component
     }
 
     /**
-     * Senin–Minggu dari tanggal — sama persis dengan JadwalController::hariDariTanggal.
-     */
-    private function hariDariTanggal(Carbon $dt): string
-    {
-        $idx = (int) $dt->format('N') - 1;
-
-        return Jadwal::HARI[$idx] ?? 'senin';
-    }
-
-    /**
      * Rule sama persis dengan JadwalController::store/update (dipisah per mode, sama seperti
      * bentuk validasi API-nya yang berbeda antara create — jumlah_pertemuan — dan edit —
      * urutan_pertemuan).
@@ -302,58 +292,24 @@ class Form extends Component
         }
 
         $n = (int) $validated['jumlah_pertemuan'];
-        for ($u = 1; $u <= $n; $u++) {
-            $slotQ = Jadwal::where('id_kelas', $validated['id_kelas'])->where('urutan_pertemuan', $u);
-            if ($this->id_ruangan) {
-                $slotQ->where('id_ruangan', $this->id_ruangan);
-            } else {
-                $slotQ->whereNull('id_ruangan');
-            }
-            if ($slotQ->exists()) {
-                $this->addError('jumlah_pertemuan', "Slot pertemuan ke-{$u} untuk kelas dan ruangan ini sudah terisi.");
+        $slotError = JadwalBatchGenerator::cekSlotTersedia($validated['id_kelas'], $n, $this->id_ruangan);
+        if ($slotError !== null) {
+            $this->addError('jumlah_pertemuan', $slotError);
 
-                return null;
-            }
+            return null;
         }
 
-        $isMingguan = ($kelas && $kelas->is_mingguan === true) || $this->tanggal_hari_otomatis;
-
-        DB::transaction(function () use ($n, $kelas, $isMingguan, $validated): void {
-            for ($u = 1; $u <= $n; $u++) {
-                $tanggalSlot = null;
-                $hariSlot = $this->hari;
-                if ($this->tanggal) {
-                    if ($isMingguan) {
-                        $dt = Carbon::parse($this->tanggal)->startOfDay()->addWeeks($u - 1);
-                        $tanggalSlot = $dt->format('Y-m-d');
-                        if ($this->tanggal_hari_otomatis || ($kelas && $kelas->is_mingguan === true)) {
-                            $hariSlot = $this->hariDariTanggal($dt);
-                        }
-                    } else {
-                        $tanggalSlot = $u === 1 ? $this->tanggal : null;
-                    }
-                }
-
-                $jadwal = Jadwal::create([
-                    'id_kelas' => $validated['id_kelas'],
-                    'id_jenis_kuliah' => $this->id_jenis_kuliah,
-                    'tanggal' => $tanggalSlot,
-                    'hari' => $hariSlot,
-                    'jam_mulai' => $this->jam_mulai ?: null,
-                    'jam_selesai' => $this->jam_selesai ?: null,
-                    'id_ruangan' => $this->id_ruangan,
-                    'urutan_pertemuan' => $u,
-                    'is_active' => $this->is_active,
-                ]);
-
-                foreach ($this->dosenIds as $dosenId) {
-                    JadwalDosen::create([
-                        'id_jadwal' => $jadwal->id,
-                        'id_dosen' => $dosenId,
-                        'status' => 'active',
-                    ]);
-                }
-            }
+        DB::transaction(function () use ($n, $kelas, $validated): void {
+            JadwalBatchGenerator::generate($kelas, $validated['id_kelas'], $n, [
+                'id_jenis_kuliah' => $this->id_jenis_kuliah,
+                'tanggal' => $this->tanggal ?: null,
+                'hari' => $this->hari,
+                'jam_mulai' => $this->jam_mulai,
+                'jam_selesai' => $this->jam_selesai,
+                'id_ruangan' => $this->id_ruangan,
+                'is_active' => $this->is_active,
+                'tanggal_hari_otomatis' => $this->tanggal_hari_otomatis,
+            ], $this->dosenIds);
         });
 
         session()->flash('status', 'Jadwal berhasil disimpan.');

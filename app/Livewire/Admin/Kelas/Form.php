@@ -4,16 +4,21 @@ namespace App\Livewire\Admin\Kelas;
 
 use App\Livewire\Admin\Kelas\Concerns\ForwardsIndexState;
 use App\Models\Dosen;
+use App\Models\Jadwal;
+use App\Models\JenisKuliah;
 use App\Models\Kelas;
 use App\Models\KelasDosen;
 use App\Models\KelompokKelas;
 use App\Models\KurikulumMatkul;
 use App\Models\Prodi;
+use App\Models\Ruangan;
 use App\Models\Semester;
+use App\Services\JadwalBatchGenerator;
 use App\Services\KelasAngkatanService;
 use App\Services\KelasKodeGenerator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -57,6 +62,28 @@ class Form extends Component
 
     /** @var array<int, string> label tampilan untuk id dosen terpilih (PIC + tim). */
     public array $dosenLabelById = [];
+
+    // Opsi "buat jadwal otomatis" (create maupun edit) — properti jadwalXxx murni untuk sub-form
+    // ini, bukan kolom Kelas, jadi sengaja tidak mengikuti nama kolom DB (Kelas sudah punya
+    // is_active miliknya sendiri). Selalu mulai nonaktif — bukan atribut kelas yang disimpan,
+    // hanya aksi sesaat di titik save().
+    public bool $buatJadwalOtomatis = false;
+
+    public ?string $jadwalHari = null;
+
+    public string $jadwalJamMulai = '';
+
+    public string $jadwalJamSelesai = '';
+
+    public ?int $jadwalIdRuangan = null;
+
+    public ?int $jadwalIdJenisKuliah = null;
+
+    public string $jadwalTanggal = '';
+
+    public bool $jadwalTanggalHariOtomatis = false;
+
+    public bool $jadwalIsActive = false;
 
     public function mount(?int $id = null): void
     {
@@ -221,18 +248,30 @@ class Form extends Component
     }
 
     /**
+     * PIC + tim pengampu digabung tanpa duplikat — dipakai untuk sinkronisasi kelas_dosen DAN
+     * (kalau opsi buat jadwal otomatis aktif) sebagai dosen pengajar pada jadwal yang dibuat,
+     * supaya admin tidak perlu memilih dosen dua kali untuk kelas dan jadwalnya.
+     *
+     * @return array<int>
+     */
+    private function resolvedDosenIds(): array
+    {
+        $allIds = $this->dosenTimIds;
+        if ($this->id_dosen_pic !== null && ! in_array($this->id_dosen_pic, $allIds, true)) {
+            $allIds[] = $this->id_dosen_pic;
+        }
+
+        return $allIds;
+    }
+
+    /**
      * Sinkronisasi kelas_dosen: tim pengampu + dosen PIC (is_pic = true) — sama persis dengan
      * KelasController::syncKelasDosen.
      */
     private function syncKelasDosen(Kelas $kelas): void
     {
         $picId = $this->id_dosen_pic;
-        $timIds = $this->dosenTimIds;
-
-        $allIds = $timIds;
-        if ($picId !== null && ! in_array($picId, $allIds, true)) {
-            $allIds[] = $picId;
-        }
+        $allIds = $this->resolvedDosenIds();
 
         $rows = KelasDosen::withTrashed()->where('id_kelas', $kelas->id)->get();
         $byDosen = $rows->keyBy('id_dosen');
@@ -267,11 +306,13 @@ class Form extends Component
     }
 
     /**
-     * Rule sama persis dengan KelasController::store/update.
+     * Rule inti sama persis dengan KelasController::store/update. Rule jadwalXxx (di bawah)
+     * murni untuk sub-form "buat jadwal otomatis" panel ini — tidak ada padanannya di
+     * KelasController karena opsi ini tidak ada di API/frontend, hanya kenyamanan panel admin.
      */
     protected function rules(): array
     {
-        return [
+        $rules = [
             'id_kurikulum_matkul' => ['required', 'integer', 'exists:kurikulum_matkul,id'],
             'id_prodi' => ['required', 'integer', 'exists:prodi,id'],
             'id_semester' => ['required', 'integer', 'exists:semester,id'],
@@ -282,6 +323,19 @@ class Form extends Component
             'jml_pertemuan' => ['nullable', 'integer', 'min:1', 'max:99'],
             'kuota' => ['nullable', 'integer', 'min:0', 'max:32767'],
         ];
+
+        if ($this->buatJadwalOtomatis) {
+            $rules += [
+                'jadwalHari' => ['nullable', 'string', Rule::in(Jadwal::HARI)],
+                'jadwalJamMulai' => ['nullable', 'date_format:H:i'],
+                'jadwalJamSelesai' => ['nullable', 'date_format:H:i'],
+                'jadwalIdRuangan' => ['nullable', 'integer', 'exists:ruangan,id'],
+                'jadwalIdJenisKuliah' => ['nullable', 'integer', 'exists:jenis_kuliah,id'],
+                'jadwalTanggal' => ['nullable', 'date'],
+            ];
+        }
+
+        return $rules;
     }
 
     public function save()
@@ -324,6 +378,31 @@ class Form extends Component
             return;
         }
 
+        // Divalidasi di luar transaksi (sama seperti Jadwal\Form::saveCreate()) supaya gagal di
+        // sini tidak meninggalkan Kelas setengah tersimpan.
+        if ($this->buatJadwalOtomatis) {
+            if ($this->jadwalTanggalHariOtomatis && ! $this->jadwalTanggal) {
+                $this->addError('jadwalTanggal', 'Tanggal mulai wajib diisi jika opsi tanggal & hari otomatis diaktifkan.');
+
+                return;
+            }
+            if ($this->jadwalJamMulai && $this->jadwalJamSelesai && strtotime($this->jadwalJamSelesai) <= strtotime($this->jadwalJamMulai)) {
+                $this->addError('jadwalJamSelesai', 'Jam selesai harus lebih besar dari jam mulai.');
+
+                return;
+            }
+            // Kelas baru pasti belum punya jadwal sama sekali — cek bentrok slot hanya relevan
+            // untuk kelas yang sudah ada (edit) dan mungkin sudah punya sebagian jadwal terisi.
+            if ($this->kelasId) {
+                $slotError = JadwalBatchGenerator::cekSlotTersedia($this->kelasId, $validated['jml_pertemuan'], $this->jadwalIdRuangan);
+                if ($slotError !== null) {
+                    $this->addError('jadwalIdRuangan', $slotError);
+
+                    return;
+                }
+            }
+        }
+
         DB::transaction(function () use ($validated): void {
             if ($this->kelasId) {
                 $kelas = Kelas::findOrFail($this->kelasId);
@@ -334,9 +413,22 @@ class Form extends Component
             }
 
             $this->syncKelasDosen($kelas);
+
+            if ($this->buatJadwalOtomatis) {
+                JadwalBatchGenerator::generate($kelas, $kelas->id, $validated['jml_pertemuan'], [
+                    'id_jenis_kuliah' => $this->jadwalIdJenisKuliah,
+                    'tanggal' => $this->jadwalTanggal ?: null,
+                    'hari' => $this->jadwalHari,
+                    'jam_mulai' => $this->jadwalJamMulai,
+                    'jam_selesai' => $this->jadwalJamSelesai,
+                    'id_ruangan' => $this->jadwalIdRuangan,
+                    'is_active' => $this->jadwalIsActive,
+                    'tanggal_hari_otomatis' => $this->jadwalTanggalHariOtomatis,
+                ], $this->resolvedDosenIds());
+            }
         });
 
-        session()->flash('status', 'Kelas berhasil disimpan.');
+        session()->flash('status', 'Kelas berhasil disimpan.'.($this->buatJadwalOtomatis ? ' Jadwal otomatis juga sudah dibuat.' : ''));
 
         return redirect($this->backUrl);
     }
@@ -365,6 +457,10 @@ class Form extends Component
                 'id' => $d->id,
                 'label' => $this->formatDosenLabel($d),
             ]),
+            // Untuk sub-form "buat jadwal otomatis" — sama seperti opsi yang dipakai Jadwal\Form.
+            'jadwalHariOptions' => collect(Jadwal::HARI)->mapWithKeys(fn ($h) => [$h => ucfirst($h)])->all(),
+            'jadwalJenisKuliahOptions' => JenisKuliah::whereNull('deleted_at')->orderBy('nama')->get(['id', 'nama']),
+            'jadwalRuanganOptions' => Ruangan::whereNull('deleted_at')->orderBy('nama')->get(['id', 'nama']),
         ])->extends('layouts.web');
     }
 }
