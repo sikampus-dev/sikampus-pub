@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Pengguna;
 
+use App\Livewire\Admin\Pengguna\Concerns\ForwardsIndexState;
 use App\Models\Fakultas;
 use App\Models\Prodi;
 use App\Models\Role;
@@ -17,7 +18,11 @@ use Spatie\Permission\PermissionRegistrar;
 
 class Show extends Component
 {
+    use ForwardsIndexState;
+
     public int $penggunaId;
+
+    public string $backUrl;
 
     public string $activeTab = 'role';
 
@@ -38,6 +43,11 @@ class Show extends Component
         $this->penggunaId = $id;
 
         User::findOrFail($id);
+
+        // Query string (search/filter/halaman aktif) diselipkan oleh link "Lihat Detail" di
+        // Index — dibaca balik di sini supaya breadcrumb & tombol Kembali mendarat di
+        // halaman/filter yang sama, bukan selalu halaman 1. Lihat Concerns\ForwardsIndexState.
+        $this->backUrl = $this->resolveBackToIndexUrl();
     }
 
     public function setTab(string $tab): void

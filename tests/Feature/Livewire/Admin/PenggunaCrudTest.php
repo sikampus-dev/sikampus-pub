@@ -179,6 +179,147 @@ it('permanently deletes a soft-deleted pengguna that has no related records', fu
     expect(User::withTrashed()->find($pengguna->id))->toBeNull();
 });
 
+it('automatically verifies the email when a new pengguna is created with status active', function () {
+    $admin = adminUser();
+    $superadminRole = Role::where('name', 'Superadmin')->firstOrFail();
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('name', 'Aktif Baru')
+        ->set('email', 'aktif.baru@example.com')
+        ->set('password', 'password123')
+        ->set('role', 'admin')
+        ->set('spatieRoleId', $superadminRole->id)
+        ->set('status', 'active')
+        ->call('save')
+        ->assertRedirect();
+
+    $pengguna = User::where('email', 'aktif.baru@example.com')->firstOrFail();
+    expect($pengguna->email_verified_at)->not->toBeNull();
+});
+
+it('does not verify the email when a new pengguna is created with status inactive', function () {
+    $admin = adminUser();
+    $superadminRole = Role::where('name', 'Superadmin')->firstOrFail();
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('name', 'Tidak Aktif Baru')
+        ->set('email', 'tidak.aktif.baru@example.com')
+        ->set('password', 'password123')
+        ->set('role', 'admin')
+        ->set('spatieRoleId', $superadminRole->id)
+        ->set('status', 'inactive')
+        ->call('save')
+        ->assertRedirect();
+
+    $pengguna = User::where('email', 'tidak.aktif.baru@example.com')->firstOrFail();
+    expect($pengguna->email_verified_at)->toBeNull();
+});
+
+it('automatically verifies the email when an existing pengguna is edited to status active', function () {
+    $admin = adminUser();
+    $pengguna = User::factory()->unverified()->create(['role' => 'admin', 'status' => 'inactive']);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $pengguna->id])
+        ->set('status', 'active')
+        ->call('save')
+        ->assertRedirect(route('admin.pengguna.show', $pengguna->id));
+
+    expect($pengguna->fresh()->email_verified_at)->not->toBeNull();
+});
+
+it('does not overwrite an already-verified email timestamp when re-saving an active pengguna', function () {
+    $admin = adminUser();
+    $verifiedAt = now()->subMonth();
+    $pengguna = User::factory()->create([
+        'role' => 'admin',
+        'status' => 'active',
+        'email_verified_at' => $verifiedAt,
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $pengguna->id])
+        ->set('status', 'active')
+        ->call('save')
+        ->assertRedirect(route('admin.pengguna.show', $pengguna->id));
+
+    // Dibandingkan sampai level detik (bukan equalTo) karena kolom datetime di MySQL memangkas
+    // microseconds saat disimpan, sedangkan $verifiedAt di memori masih menyimpannya.
+    expect($pengguna->fresh()->email_verified_at->format('Y-m-d H:i:s'))->toBe($verifiedAt->format('Y-m-d H:i:s'));
+});
+
+it('keeps the email verified when an active pengguna is deactivated', function () {
+    $admin = adminUser();
+    $verifiedAt = now()->subMonth();
+    $pengguna = User::factory()->create([
+        'role' => 'admin',
+        'status' => 'active',
+        'email_verified_at' => $verifiedAt,
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $pengguna->id])
+        ->set('status', 'inactive')
+        ->call('save')
+        ->assertRedirect(route('admin.pengguna.show', $pengguna->id));
+
+    expect($pengguna->fresh()->email_verified_at)->not->toBeNull();
+    expect($pengguna->fresh()->status)->toBe('inactive');
+});
+
+it('shows the email verification badge on the index table', function () {
+    $admin = adminUser();
+    User::factory()->create(['name' => 'Sudah Verifikasi', 'role' => 'admin', 'status' => 'active', 'email_verified_at' => now()]);
+    User::factory()->unverified()->create(['name' => 'Belum Verifikasi', 'role' => 'admin', 'status' => 'inactive']);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->assertSee('Terverifikasi')
+        ->assertSee('Belum Terverifikasi');
+});
+
+it('includes the current page in the index "Lihat Detail"/"Ubah" links so returning lands on the same pagination page', function () {
+    $admin = adminUser();
+    User::factory()->count(15)->create(['role' => 'admin', 'status' => 'active']);
+
+    $response = $this->actingAs($admin)->get(route('admin.pengguna.index', ['page' => 2]));
+
+    $secondPageUser = User::orderBy('name')->skip(10)->first();
+
+    $response->assertOk()
+        ->assertSee(route('admin.pengguna.show', $secondPageUser->id).'?page=2', false)
+        ->assertSee(route('admin.pengguna.edit', $secondPageUser->id).'?page=2', false);
+});
+
+it('does not append a page query string when already on the first page', function () {
+    $admin = adminUser();
+    $pengguna = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+
+    $this->actingAs($admin)->get(route('admin.pengguna.index'))
+        ->assertOk()
+        ->assertSee(route('admin.pengguna.show', $pengguna->id).'"', false);
+});
+
+it('resolves the detail page "Kembali" link to include the page it was opened from', function () {
+    $admin = adminUser();
+    $target = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+
+    $this->actingAs($admin)->get(route('admin.pengguna.show', $target->id).'?page=3')
+        ->assertOk()
+        ->assertSee(route('admin.pengguna.index').'?page=3', false);
+});
+
+it('resolves the detail page "Kembali" link back to a plain index url when opened without a page query', function () {
+    $admin = adminUser();
+    $target = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+
+    $this->actingAs($admin)->get(route('admin.pengguna.show', $target->id))
+        ->assertOk()
+        ->assertSee(route('admin.pengguna.index').'"', false);
+});
+
 // user_roles adalah tabel legacy (lihat catatan di Index.php) tapi tetap constrained('users')
 // ->restrictOnDelete() di DB — restrict itu berlaku walau baris perujuknya sendiri sudah
 // soft-deleted, jadi harus ditolak lebih dulu dengan pesan jelas kalau ternyata terisi.

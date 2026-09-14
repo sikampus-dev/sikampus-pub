@@ -152,9 +152,20 @@ class Index extends Component
 
         $penggunaList = $query->orderBy('name')->paginate($this->perPage);
 
+        // Diselipkan ke link "Lihat Detail"/"Ubah" supaya tombol Kembali di halaman detail bisa
+        // mendarat di halaman/filter yang sama persis — lihat Pengguna\Concerns\ForwardsIndexState.
+        $returnParams = array_filter([
+            'search' => $this->search !== '' ? $this->search : null,
+            'filterRole' => $this->filterRole !== '' ? $this->filterRole : null,
+            'filterStatus' => $this->filterStatus !== '' ? $this->filterStatus : null,
+            'showTrashed' => $this->showTrashed ? '1' : null,
+            'page' => $penggunaList->currentPage() > 1 ? $penggunaList->currentPage() : null,
+        ], fn ($value) => $value !== null);
+
         // ->extends() (bukan #[Layout] attribute) — lihat catatan di App\Livewire\Admin\Fakultas\Index::render()
         return view('livewire.admin.pengguna.index', [
             'penggunaList' => $penggunaList,
+            'returnQuery' => http_build_query($returnParams),
         ])->extends('layouts.web');
     }
 }

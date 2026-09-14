@@ -34,7 +34,8 @@ it('hides the tambah/ubah/hapus pengguna buttons from a view-only staff member',
 
     $this->actingAs($admin)->get(route('admin.pengguna.index'))
         ->assertOk()
-        ->assertDontSee('Tambah Pengguna');
+        ->assertDontSee('Tambah Pengguna')
+        ->assertDontSee(route('admin.pengguna.edit', $target->id), false);
 
     $this->actingAs($admin)->get(route('admin.pengguna.show', $target->id))
         ->assertOk()

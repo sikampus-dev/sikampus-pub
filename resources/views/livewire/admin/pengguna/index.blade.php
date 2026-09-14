@@ -97,6 +97,7 @@
                         <th class="px-4 py-3">Username</th>
                         <th class="px-4 py-3">Tipe</th>
                         <th class="px-4 py-3">Status</th>
+                        <th class="px-4 py-3">Verifikasi Email</th>
                         <th class="px-4 py-3">Telepon</th>
                         <th class="px-4 py-3 text-right">Aksi</th>
                     </tr>
@@ -120,6 +121,19 @@
                                 @else
                                     <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $pengguna->status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-600' }}">
                                         {{ $pengguna->status === 'active' ? 'Aktif' : 'Tidak Aktif' }}
+                                    </span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3">
+                                @if ($pengguna->email_verified_at)
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                                        <i data-lucide="mail-check" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                        Terverifikasi
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
+                                        <i data-lucide="circle-dashed" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                        Belum Terverifikasi
                                     </span>
                                 @endif
                             </td>
@@ -149,19 +163,28 @@
                                         @endif
                                     @else
                                         <a
-                                            href="{{ route('admin.pengguna.show', $pengguna->id) }}"
+                                            href="{{ route('admin.pengguna.show', $pengguna->id).($returnQuery !== '' ? '?'.$returnQuery : '') }}"
                                             class="inline-flex items-center justify-center rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                                             title="Lihat Detail"
                                         >
                                             <i data-lucide="eye" class="h-4 w-4" aria-hidden="true"></i>
                                         </a>
+                                        @if (\App\Support\PanelAccess::can(auth()->user(), 'pengguna', 'manage'))
+                                            <a
+                                                href="{{ route('admin.pengguna.edit', $pengguna->id).($returnQuery !== '' ? '?'.$returnQuery : '') }}"
+                                                class="inline-flex items-center justify-center rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+                                                title="Ubah"
+                                            >
+                                                <i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i>
+                                            </a>
+                                        @endif
                                     @endif
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada data pengguna.</td>
+                            <td colspan="8" class="px-4 py-10 text-center text-neutral-500">Belum ada data pengguna.</td>
                         </tr>
                     @endforelse
                 </tbody>

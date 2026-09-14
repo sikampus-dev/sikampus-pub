@@ -214,7 +214,19 @@ class Form extends Component
 
             unset($validated['id_mahasiswa'], $validated['id_dosen']);
 
-            User::findOrFail($this->penggunaId)->update($validated);
+            $pengguna = User::findOrFail($this->penggunaId);
+
+            // Begitu status diubah jadi Aktif, anggap emailnya sudah terverifikasi (admin yang
+            // mengaktifkan akun sudah memvalidasi identitasnya secara manual) — sama seperti
+            // aturan saat create di bawah. Jangan timpa timestamp yang sudah ada (mis. dari
+            // verifikasi asli lewat email), dan jangan pernah di-unset lagi kalau admin
+            // menonaktifkan akun ini nanti; nonaktif bukan berarti emailnya jadi belum
+            // terverifikasi.
+            if ($validated['status'] === 'active' && ! $pengguna->email_verified_at) {
+                $validated['email_verified_at'] = now();
+            }
+
+            $pengguna->update($validated);
 
             session()->flash('status', 'Data pengguna berhasil diperbarui.');
 
@@ -281,7 +293,10 @@ class Form extends Component
 
         $validated['password'] = Hash::make($validated['password']);
         $validated['status'] = $validated['status'] ?? 'active';
-        $validated['email_verified_at'] = now();
+        // Sama seperti pada update di atas: hanya status Aktif yang otomatis dianggap
+        // terverifikasi. Akun yang dibuat Tidak Aktif menunggu verifikasi normal (mis. lewat
+        // alur aktivasi) sebelum email_verified_at terisi.
+        $validated['email_verified_at'] = $validated['status'] === 'active' ? now() : null;
         unset($validated['id_mahasiswa'], $validated['id_dosen'], $validated['spatieRoleId']);
 
         DB::beginTransaction();
