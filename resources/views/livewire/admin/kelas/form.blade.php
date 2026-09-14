@@ -78,8 +78,13 @@
                 <div>
                     <label class="mb-1.5 block text-sm font-medium text-neutral-700">Kelas Mahasiswa</label>
                     {{-- :live supaya updatedIdKelompokKelas() jalan dan mengisi angkatan dari
-                         semester masuk mahasiswa di rombongan ini. --}}
+                         semester masuk mahasiswa di rombongan ini. wire:key terikat id_prodi: sama
+                         seperti dropdown Kurikulum Mata Kuliah di atas, opsi kelas mahasiswa ikut
+                         disaring oleh prodi (lihat kelompokKelasQuery di render()), jadi elemen ini
+                         harus benar-benar diganti (bukan di-patch, x-searchable-select memakai
+                         wire:ignore) supaya opsi yang baru ikut termuat. --}}
                     <x-searchable-select
+                        wire:key="id-kelompok-kelas-select-{{ $id_prodi }}"
                         model="id_kelompok_kelas"
                         :options="$kelompokKelasOptions"
                         placeholder="— Opsional —"

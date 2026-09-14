@@ -402,6 +402,53 @@ it('shows all kelas mahasiswa filter options when no prodi is selected, and scop
         ->assertDontSee('Kelompok B');
 });
 
+it('defaults semester berjalan to the active semester when creating a kelas, but not when editing one', function () {
+    $semesterAktif = Semester::factory()->create(['is_active' => true]);
+    $semesterLain = Semester::factory()->create(['is_active' => false]);
+    $admin = adminUser();
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->assertSet('id_semester', $semesterAktif->id);
+
+    // Kelas yang sudah ada tetap menampilkan semester_berjalan miliknya sendiri, bukan semester aktif.
+    $kelas = Kelas::factory()->create(['id_semester' => $semesterLain->id]);
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $kelas->id])
+        ->assertSet('id_semester', $semesterLain->id);
+});
+
+it('shows all kelas mahasiswa options in the form when no prodi is picked, and scopes them once one is', function () {
+    $admin = adminUser();
+    $prodiA = Prodi::factory()->create();
+    $prodiB = Prodi::factory()->create();
+    KelompokKelas::factory()->create(['nama' => 'Kelompok A', 'id_prodi' => $prodiA->id]);
+    KelompokKelas::factory()->create(['nama' => 'Kelompok B', 'id_prodi' => $prodiB->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->assertSee('Kelompok A')
+        ->assertSee('Kelompok B')
+        ->set('id_prodi', $prodiA->id)
+        ->assertSee('Kelompok A')
+        ->assertDontSee('Kelompok B');
+});
+
+it('resets the picked kelas mahasiswa when the prodi changes, since it may no longer belong to the new prodi', function () {
+    $admin = adminUser();
+    $prodiA = Prodi::factory()->create();
+    $prodiB = Prodi::factory()->create();
+    $kelompokA = KelompokKelas::factory()->create(['id_prodi' => $prodiA->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('id_prodi', $prodiA->id)
+        ->set('id_kelompok_kelas', $kelompokA->id)
+        ->assertSet('id_kelompok_kelas', $kelompokA->id)
+        ->set('id_prodi', $prodiB->id)
+        ->assertSet('id_kelompok_kelas', null);
+});
+
 it('displays prodi filter options with the jenjang code in parentheses', function () {
     $admin = adminUser();
     $jenjang = Jenjang::factory()->create(['kode' => 'D3']);

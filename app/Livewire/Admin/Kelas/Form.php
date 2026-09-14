@@ -91,6 +91,13 @@ class Form extends Component
         $this->resolveBackUrl();
 
         if ($id === null) {
+            // Sama seperti default filter semester di Kelas\Index/Jadwal\Index: semester aktif
+            // ter-pilih otomatis untuk kelas baru — bukan kolom wajib diisi manual tiap kali.
+            $semesterAktif = Semester::where('is_active', true)->first();
+            if ($semesterAktif) {
+                $this->id_semester = $semesterAktif->id;
+            }
+
             return;
         }
 
@@ -133,11 +140,14 @@ class Form extends Component
     }
 
     /**
-     * Reset kurikulum mata kuliah saat prodi berganti — pilihan lama sudah tidak relevan.
+     * Reset kurikulum mata kuliah DAN kelas mahasiswa saat prodi berganti — opsi kelompokKelasOptions()
+     * di render() ikut disaring oleh id_prodi (lihat catatannya), jadi pilihan lama bisa saja sudah
+     * tidak muncul lagi di daftar yang baru.
      */
     public function updatedIdProdi(): void
     {
         $this->id_kurikulum_matkul = null;
+        $this->id_kelompok_kelas = null;
     }
 
     /**
@@ -444,6 +454,14 @@ class Form extends Component
             }
         }
 
+        // Kelas Mahasiswa mengikuti prodi yang dipilih (updatedIdProdi() membuang pilihan lama yang
+        // mungkin sudah tidak relevan) — kalau belum ada prodi terpilih, tampilkan semua kelas
+        // mahasiswa, sama seperti filter serupa di App\Livewire\Admin\Kelas\Index::render().
+        $kelompokKelasQuery = KelompokKelas::whereNull('deleted_at');
+        if ($this->id_prodi) {
+            $kelompokKelasQuery->where('id_prodi', $this->id_prodi);
+        }
+
         // ->extends() (bukan #[Layout] attribute) — lihat catatan di App\Livewire\Admin\Fakultas\Index::render()
         return view('livewire.admin.kelas.form', [
             'prodiOptions' => $prodiQuery->orderBy('nama')->get()->map(fn (Prodi $p) => (object) [
@@ -452,7 +470,7 @@ class Form extends Component
             ]),
             'semesterOptions' => Semester::whereNull('deleted_at')->orderByDesc('kode')->get(['id', 'kode', 'nama'])
                 ->map(fn (Semester $s) => (object) ['id' => $s->id, 'label' => "{$s->nama} ({$s->kode})"]),
-            'kelompokKelasOptions' => KelompokKelas::whereNull('deleted_at')->orderBy('nama')->get(['id', 'nama']),
+            'kelompokKelasOptions' => $kelompokKelasQuery->orderBy('nama')->get(['id', 'nama']),
             'dosenOptions' => Dosen::whereNull('deleted_at')->orderBy('nama')->get()->map(fn (Dosen $d) => (object) [
                 'id' => $d->id,
                 'label' => $this->formatDosenLabel($d),
