@@ -440,7 +440,15 @@ class Form extends Component
 
         session()->flash('status', 'Kelas berhasil disimpan.'.($this->buatJadwalOtomatis ? ' Jadwal otomatis juga sudah dibuat.' : ''));
 
-        return redirect($this->backUrl);
+        // Sengaja BUKAN $this->backUrl (yang membawa filter dari sebelum form dibuka) — begitu
+        // simpan berhasil, filter Index diarahkan mengikuti prodi & semester milik kelas yang baru
+        // saja disimpan, supaya kelas itu langsung kelihatan di daftar tanpa admin mengatur ulang
+        // filter secara manual. search/kelas mahasiswa/page dari backUrl sengaja tidak dibawa —
+        // kombinasi lama itu bisa saja tidak lagi cocok dengan prodi/semester yang baru.
+        return redirect()->route('admin.akademik.kelas', [
+            'id_prodi' => $validated['id_prodi'],
+            'id_semester' => $validated['id_semester'],
+        ]);
     }
 
     public function render()

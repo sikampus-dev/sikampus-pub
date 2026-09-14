@@ -45,7 +45,7 @@ it('creates, updates, and deletes a kelas', function () {
         ->set('id_dosen_pic', $dosen->id)
         ->set('kode', 'A')
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas'));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester2->id]));
 
     $kelas = Kelas::where('kode', 'A')->firstOrFail();
     expect($kelas->id_dosen_pic)->toBe($dosen->id);
@@ -146,7 +146,7 @@ it('does not create any jadwal when buatJadwalOtomatis is left off', function ()
         ->set('id_semester', $semester->id)
         ->set('id_angkatan', $semester->id)
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas'));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id]));
 
     $kelas = Kelas::where('id_kurikulum_matkul', $kurikulumMatkul->id)->firstOrFail();
     expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(0);
@@ -176,7 +176,7 @@ it('creates N jadwal slots with the kelas team as dosen when buatJadwalOtomatis 
         ->set('jadwalJamSelesai', '10:00')
         ->set('jadwalIdRuangan', $ruangan->id)
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas'));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id]));
 
     $kelas = Kelas::where('id_kurikulum_matkul', $kurikulumMatkul->id)->firstOrFail();
     $jadwalRows = Jadwal::where('id_kelas', $kelas->id)->orderBy('urutan_pertemuan')->get();
@@ -233,7 +233,7 @@ it('lets an existing kelas generate jadwal on edit, but rejects it when a slot i
         ->test(Form::class, ['id' => $kelas->id])
         ->set('buatJadwalOtomatis', true)
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas'));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $kelas->id_prodi, 'id_semester' => $kelas->id_semester]));
 
     expect(Jadwal::where('id_kelas', $kelas->id)->whereNull('id_ruangan')->count())->toBe(2);
 });
@@ -585,7 +585,7 @@ it('carries the forwarded state into the Ubah link on the detail page too', func
         ->assertSee(route('admin.akademik.kelas.edit', $kelas->id).'?page=2&search=algoritma');
 });
 
-it('carries the forwarded state through the edit form Batal link and the save redirect', function () {
+it('carries the forwarded state into the edit form Batal link', function () {
     $admin = adminUser();
     $kelas = Kelas::factory()->create();
 
@@ -596,13 +596,27 @@ it('carries the forwarded state through the edit form Batal link and the save re
         ->assertOk()
         ->assertSee($expectedBackUrl)
         ->assertDontSee('unexpected=1');
+});
 
+// Beda dari tombol Batal di atas: begitu simpan BERHASIL, redirect sengaja tidak memakai backUrl
+// (filter dari sebelum form dibuka) — diarahkan ke filter prodi & semester milik kelas yang baru
+// saja disimpan, supaya langsung kelihatan di daftar tanpa admin mengatur ulang filter manual.
+it('redirects to the index filtered by the saved kelas own prodi and semester after a successful save, not the backUrl', function () {
+    $admin = adminUser();
+    $prodi = Prodi::factory()->create();
+    $semester = Semester::factory()->create();
+    $kelas = Kelas::factory()->create(['id_prodi' => $prodi->id, 'id_semester' => $semester->id]);
+
+    $expectedRedirect = route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id]);
+
+    // Datang dari halaman/filter yang sama sekali berbeda (page 2, search "algoritma") — redirect
+    // setelah simpan tetap harus mengikuti prodi/semester kelas, bukan filter asal ini.
     Livewire::withQueryParams(['page' => '2', 'search' => 'algoritma'])
         ->actingAs($admin)
         ->test(Form::class, ['id' => $kelas->id])
         ->set('kuota', '30')
         ->call('save')
-        ->assertRedirect($expectedBackUrl);
+        ->assertRedirect($expectedRedirect);
 });
 
 it('redirects unauthenticated users to the admin login page', function () {
