@@ -91,12 +91,17 @@ class Form extends Component
      * di form, jadi hasilnya bounded oleh filter itu sendiri, bukan angka arbitrer. Regresi yang
      * sudah pernah diperbaiki di App\Livewire\Admin\Jadwal\Form::kelasOptions() — kombinasi
      * prodi+semester dengan lebih dari 200 kelas kehilangan sisanya begitu saja kalau dibatasi.
+     *
+     * Label menyertakan nama kelompok kelas (kalau ada) — tanpa ini, kelas dengan mata kuliah dan
+     * semester yang sama tapi kelompok kelas berbeda (mis. Kelas A vs Kelas B) tampil dengan label
+     * identik di dropdown dan tidak bisa dibedakan. Pola sama seperti Jadwal\Form::kelasOptions()
+     * dan Krs\Form::kelasOptions().
      */
     #[Computed]
     public function kelasOptions()
     {
         $user = Auth::user();
-        $query = Kelas::with(['kurikulumMatkul.matkul', 'semester'])->whereNull('deleted_at');
+        $query = Kelas::with(['kurikulumMatkul.matkul', 'semester', 'kelompokKelas'])->whereNull('deleted_at');
 
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
@@ -112,10 +117,17 @@ class Form extends Component
             $query->where('id_semester', $this->filterSemester);
         }
 
-        return $query->orderBy('id')->get()->map(fn (Kelas $k) => (object) [
-            'id' => $k->id,
-            'label' => trim(($k->kurikulumMatkul?->matkul?->kode ? "{$k->kurikulumMatkul->matkul->kode} - " : '').($k->kurikulumMatkul?->matkul?->nama ?? 'Kelas').($k->semester ? " ({$k->semester->nama} {$k->semester->kode})" : '')),
-        ]);
+        return $query->orderBy('id')->get()->map(function (Kelas $k) {
+            $label = trim(($k->kurikulumMatkul?->matkul?->kode ? "{$k->kurikulumMatkul->matkul->kode} - " : '').($k->kurikulumMatkul?->matkul?->nama ?? 'Kelas'));
+            if ($k->kelompokKelas?->nama) {
+                $label .= ' · Kelompok: '.$k->kelompokKelas->nama;
+            }
+            if ($k->semester) {
+                $label .= " ({$k->semester->nama} {$k->semester->kode})";
+            }
+
+            return (object) ['id' => $k->id, 'label' => $label];
+        });
     }
 
     /**
