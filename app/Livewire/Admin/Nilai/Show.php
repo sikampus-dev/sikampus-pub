@@ -5,7 +5,6 @@ namespace App\Livewire\Admin\Nilai;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
 use App\Models\Nilai;
-use App\Models\NilaiRevisi;
 use App\Models\Semester;
 use App\Services\SemesterService;
 use App\Services\UrutanMatkulService;
@@ -198,21 +197,12 @@ class Show extends Component
             abort(404);
         }
 
-        $idKrs = (int) $nilai->id_krs;
         $deletedBy = $user ? ($user->name ?? (string) ($user->email ?? $user->id)) : 'system';
 
-        DB::transaction(function () use ($nilai, $idKrs, $deletedBy): void {
-            DB::table('nilai_komponen')
-                ->where('id_krs', $idKrs)
-                ->whereNull('deleted_at')
-                ->update([
-                    'deleted_at' => now(),
-                    'deleted_by' => $deletedBy,
-                    'updated_at' => now(),
-                ]);
-
-            NilaiRevisi::where('id_krs', $idKrs)->whereNull('deleted_at')->delete();
-
+        // Komponen dan revisi ikut terhapus lewat AturanHapusBerantai (Nilai::$hapusBerantai),
+        // dengan deleted_at yang sama sehingga bisa dipulihkan utuh. Dulu dihapus manual lewat
+        // DB::table dan query builder, yang memberi cap waktu berbeda dan melewati event model.
+        DB::transaction(function () use ($nilai, $deletedBy): void {
             $nilai->deleted_by = $deletedBy;
             $nilai->save();
             $nilai->delete();

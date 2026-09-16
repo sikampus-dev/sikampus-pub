@@ -2210,22 +2210,12 @@ class NilaiController extends Controller
             }
         }
 
-        $idKrs = (int) $nilai->id_krs;
         $deletedBy = $user ? ($user->name ?? (string) ($user->email ?? $user->id)) : 'system';
 
         try {
-            DB::transaction(function () use ($nilai, $idKrs, $deletedBy): void {
-                DB::table('nilai_komponen')
-                    ->where('id_krs', $idKrs)
-                    ->whereNull('deleted_at')
-                    ->update([
-                        'deleted_at' => now(),
-                        'deleted_by' => $deletedBy,
-                        'updated_at' => now(),
-                    ]);
-
-                NilaiRevisi::where('id_krs', $idKrs)->whereNull('deleted_at')->delete();
-
+            // Komponen dan revisi ikut terhapus lewat AturanHapusBerantai (Nilai::$hapusBerantai)
+            // — sama persis dengan App\Livewire\Admin\Nilai\Show::delete.
+            DB::transaction(function () use ($nilai, $deletedBy): void {
                 $nilai->deleted_by = $deletedBy;
                 $nilai->save();
                 $nilai->delete();

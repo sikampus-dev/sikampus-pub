@@ -198,6 +198,10 @@ class Pengajuan extends Component
 
         abort_if($krs === null, 404, 'KRS tidak ditemukan atau tidak dapat dibatalkan.');
         abort_if($krs->approved_at !== null, 422, 'KRS yang sudah disetujui tidak dapat dibatalkan.');
+        // KRS pending tetap bisa punya nilai final: finalisasi nilai dosen tidak menyaring
+        // approved_at. Nilai final menahan penghapusan KRS (AturanHapusBerantai) — dicek di sini
+        // supaya mahasiswa mendapat pesan yang ditujukan kepadanya, bukan pesan untuk admin.
+        abort_if($krs->pemakaiYangMemblokirHapus() !== [], 422, 'KRS ini sudah memiliki nilai final dan tidak dapat dibatalkan. Silakan hubungi bagian akademik.');
 
         $krs->delete();
 

@@ -111,6 +111,7 @@
                 <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     <tr>
                         <th class="px-4 py-3">Mata Kuliah</th>
+                        <th class="px-4 py-3">Kode Kelas</th>
                         <th class="px-4 py-3">Semester</th>
                         <th class="px-4 py-3 text-center">SKS</th>
                         <th class="px-4 py-3">Dosen Pengampu</th>
@@ -130,6 +131,7 @@
                                     {{ $matkul?->kode ? $matkul->kode.' - ' : '' }}{{ $matkul?->nama ?? '—' }}
                                 </div>
                             </td>
+                            <td class="px-4 py-3 text-neutral-600">{{ filled($krs->kelas->kode ?? null) ? $krs->kelas->kode : '—' }}</td>
                             <td class="px-4 py-3 text-neutral-600">
                                 {{ $krs->kelas->semester ? $krs->kelas->semester->nama.' ('.$krs->kelas->semester->kode.')' : '—' }}
                             </td>
@@ -162,7 +164,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-10 text-center text-neutral-500">Belum ada data KRS.</td>
+                            <td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada data KRS.</td>
                         </tr>
                     @endforelse
                 </tbody>

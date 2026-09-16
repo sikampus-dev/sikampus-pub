@@ -172,3 +172,16 @@ it('lists mata kuliah sorted by name on the detail krs page', function () {
         ->assertOk()
         ->assertSeeInOrder(['Anatomi Manusia', 'Biologi Sel', 'Zoologi Dasar']);
 });
+
+it('menampilkan kode kelas di tabel detail KRS', function () {
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create();
+    $kelas = Kelas::factory()->create(['kode' => 'BID24']);
+    $tanpaKode = Kelas::factory()->create(['kode' => null]);
+    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelas->id]);
+    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $tanpaKode->id]);
+
+    Livewire::actingAs($admin)->test(Show::class, ['id' => $mahasiswa->id])
+        ->assertSeeInOrder(['Mata Kuliah', 'Kode Kelas', 'Semester'])
+        ->assertSee('BID24');
+});

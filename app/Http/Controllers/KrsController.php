@@ -2530,6 +2530,11 @@ class KrsController extends Controller
             return response()->json(['message' => 'KRS yang sudah disetujui tidak dapat dibatalkan'], 422);
         }
 
+        // Sama persis dengan App\Livewire\Mahasiswa\Krs\Pengajuan::cancelKrs.
+        if ($krs->pemakaiYangMemblokirHapus() !== []) {
+            return response()->json(['message' => 'KRS ini sudah memiliki nilai final dan tidak dapat dibatalkan. Silakan hubungi bagian akademik.'], 422);
+        }
+
         $krs->delete();
 
         return response()->json(['message' => 'Pengajuan KRS berhasil dibatalkan']);
