@@ -7,6 +7,7 @@ use App\Models\Kelas;
 use App\Models\Krs;
 use App\Models\Tagihan;
 use App\Models\Ujian;
+use App\Services\JadwalUjianDuplikat;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -17,6 +18,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -165,10 +168,10 @@ class UjianController extends Controller
         $headerStyle = [
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => [
-                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'fillType' => Fill::FILL_SOLID,
                 'startColor' => ['rgb' => '4472C4'],
             ],
-            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
         $sheet->getStyle('A1:F1')->applyFromArray($headerStyle);
 
@@ -464,18 +467,16 @@ class UjianController extends Controller
             }
         }
 
-        $dupe = Ujian::query()
-            ->where('id_kelas', (int) $validated['id_kelas'])
-            ->where('id_semester', $idSemester)
-            ->where('jenis_ujian', $validated['jenis_ujian'])
-            ->exists();
-        if ($dupe) {
-            return response()->json([
-                'message' => 'Untuk kelas, semester, dan jenis ujian ini sudah ada jadwal.',
-                'errors' => [
-                    'id_kelas' => ['Kombinasi kelas, semester, dan jenis ujian harus unik.'],
-                ],
-            ], 422);
+        // withTrashed() lewat JadwalUjianDuplikat: unique `ujian_unique` tidak menyertakan
+        // deleted_at, jadi baris terhapus tetap menduduki slotnya dan dulu lolos cek ini lalu
+        // menabrak constraint sebagai 500.
+        $bentrok = JadwalUjianDuplikat::cari(
+            (int) $validated['id_kelas'],
+            $idSemester,
+            $validated['jenis_ujian'],
+        );
+        if ($bentrok !== null) {
+            return $this->responsBentrok($bentrok);
         }
 
         $actor = $request->user() ? ((string) ($request->user()->name ?? $request->user()->id)) : 'system';
@@ -535,19 +536,9 @@ class UjianController extends Controller
             }
         }
 
-        $dupe = Ujian::query()
-            ->where('id', '!=', $ujian->id)
-            ->where('id_kelas', $idKelas)
-            ->where('id_semester', $idSemester)
-            ->where('jenis_ujian', $jenisUjian)
-            ->exists();
-        if ($dupe) {
-            return response()->json([
-                'message' => 'Untuk kelas, semester, dan jenis ujian ini sudah ada jadwal.',
-                'errors' => [
-                    'id_kelas' => ['Kombinasi kelas, semester, dan jenis ujian harus unik.'],
-                ],
-            ], 422);
+        $bentrok = JadwalUjianDuplikat::cari($idKelas, $idSemester, $jenisUjian, (int) $ujian->id);
+        if ($bentrok !== null) {
+            return $this->responsBentrok($bentrok);
         }
 
         $actor = $request->user() ? ((string) ($request->user()->name ?? $request->user()->id)) : 'system';
@@ -677,6 +668,42 @@ class UjianController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Respons untuk bentrokan unique `ujian_unique`.
+     *
+     * Bentrok dengan jadwal HIDUP tetap 422 seperti sebelumnya. Bentrok dengan jadwal TERHAPUS
+     * dijawab 409 plus id barisnya, karena penyebab dan jalan keluarnya berbeda: klien tidak bisa
+     * melihat baris itu di daftar mana pun, jadi tanpa id-nya ia hanya tahu "duplikat" tanpa bisa
+     * memulihkan atau menghapusnya permanen. Panel admin memakai ini untuk memunculkan tawaran.
+     */
+    private function responsBentrok(Ujian $bentrok): JsonResponse
+    {
+        if (! $bentrok->trashed()) {
+            return response()->json([
+                'message' => 'Untuk kelas, semester, dan jenis ujian ini sudah ada jadwal.',
+                'errors' => [
+                    'id_kelas' => [JadwalUjianDuplikat::pesanBentrokHidup()],
+                ],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => JadwalUjianDuplikat::pesanBentrokTerhapus(),
+            'errors' => [
+                'id_kelas' => [JadwalUjianDuplikat::pesanBentrokTerhapus()],
+            ],
+            'duplikat_terhapus' => [
+                'id' => (int) $bentrok->id,
+                'jenis_ujian' => $bentrok->jenis_ujian,
+                'tanggal_mulai' => $bentrok->tanggal_mulai?->toIso8601String(),
+                'tanggal_selesai' => $bentrok->tanggal_selesai?->toIso8601String(),
+                'id_ruangan' => $bentrok->id_ruangan !== null ? (int) $bentrok->id_ruangan : null,
+                'deleted_at' => $bentrok->deleted_at?->toIso8601String(),
+                'deleted_by' => $bentrok->deleted_by,
+            ],
+        ], 409);
     }
 
     private function assertTanggalUjianTidakMundur(mixed $mulai, mixed $selesai): void

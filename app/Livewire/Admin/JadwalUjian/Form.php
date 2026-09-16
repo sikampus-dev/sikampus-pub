@@ -8,7 +8,9 @@ use App\Models\Prodi;
 use App\Models\Ruangan;
 use App\Models\Semester;
 use App\Models\Ujian;
+use App\Services\JadwalUjianDuplikat;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -34,6 +36,12 @@ class Form extends Component
     public string $tanggal_mulai = '';
 
     public string $tanggal_selesai = '';
+
+    /**
+     * Id jadwal ujian TERHAPUS yang menduduki kombinasi unik yang sedang disimpan.
+     * Terisi = modal tawaran pulihkan / hapus permanen sedang tampil.
+     */
+    public ?int $duplikatTerhapusId = null;
 
     public function mount(?int $id = null): void
     {
@@ -130,6 +138,89 @@ class Form extends Component
         });
     }
 
+    /** Baris terhapus yang sedang ditawarkan, lengkap dengan relasi untuk ditampilkan di modal. */
+    #[Computed]
+    public function duplikatTerhapus(): ?Ujian
+    {
+        if (! $this->duplikatTerhapusId) {
+            return null;
+        }
+
+        return Ujian::onlyTrashed()
+            ->with(['kelas.kurikulumMatkul.matkul', 'kelas.kelompokKelas', 'semester', 'ruangan'])
+            ->find($this->duplikatTerhapusId);
+    }
+
+    public function batalkanDuplikat(): void
+    {
+        $this->duplikatTerhapusId = null;
+    }
+
+    /**
+     * Pulihkan jadwal lama APA ADANYA — isian form sengaja diabaikan, dan modal menyatakan itu.
+     * Memakai isian form akan diam-diam mengubah tanggal/ruangan jadwal yang admin kira ia
+     * kembalikan utuh.
+     */
+    public function pulihkanDuplikat()
+    {
+        $ujian = $this->duplikatTerhapusUntukAksi();
+        if (! $ujian) {
+            return null;
+        }
+
+        $ujian->restore();
+        $ujian->update(['deleted_by' => null, 'updated_by' => $this->actor()]);
+
+        $this->duplikatTerhapusId = null;
+        session()->flash('status', 'Jadwal ujian yang terhapus berhasil dipulihkan beserta tanggal dan ruangan lamanya.');
+
+        return redirect($this->backUrl);
+    }
+
+    /** Hapus permanen jadwal lama, lalu lanjutkan menyimpan isian form seperti biasa. */
+    public function hapusPermanenDuplikat()
+    {
+        $ujian = $this->duplikatTerhapusUntukAksi();
+        if (! $ujian) {
+            return null;
+        }
+
+        $ujian->forceDelete();
+        $this->duplikatTerhapusId = null;
+
+        return $this->save();
+    }
+
+    /**
+     * Baris terhapus yang boleh disentuh user ini. Scope prodi diperiksa ULANG di sini, bukan
+     * hanya saat modal dibuka — id-nya properti publik Livewire, jadi bisa diganti dari klien.
+     */
+    private function duplikatTerhapusUntukAksi(): ?Ujian
+    {
+        if (! $this->duplikatTerhapusId) {
+            return null;
+        }
+
+        $ujian = Ujian::onlyTrashed()->find($this->duplikatTerhapusId);
+        if (! $ujian) {
+            $this->duplikatTerhapusId = null;
+            $this->addError('id_kelas', 'Jadwal ujian terhapus itu sudah tidak ada lagi. Silakan simpan ulang.');
+
+            return null;
+        }
+
+        $this->ensureAccess($ujian);
+
+        return $ujian;
+    }
+
+    private function actor(): string
+    {
+        $user = Auth::user();
+
+        return $user ? ((string) ($user->name ?? $user->id)) : 'system';
+    }
+
     /**
      * Rule sama persis dengan UjianController::store/update.
      */
@@ -186,19 +277,31 @@ class Form extends Component
             }
         }
 
-        $dupe = Ujian::query()
-            ->when($this->ujianId, fn ($q) => $q->where('id', '!=', $this->ujianId))
-            ->where('id_kelas', $validated['id_kelas'])
-            ->where('id_semester', $idSemester)
-            ->where('jenis_ujian', $validated['jenis_ujian'])
-            ->exists();
-        if ($dupe) {
-            $this->addError('id_kelas', 'Kombinasi kelas, semester, dan jenis ujian harus unik.');
+        // withTrashed(): unique `ujian_unique` tidak menyertakan deleted_at, jadi baris yang sudah
+        // dihapus tetap menduduki slotnya. Tanpa ini, baris itu lolos cek lalu menabrak constraint
+        // di database dan berakhir sebagai 500.
+        $bentrok = JadwalUjianDuplikat::cari(
+            (int) $validated['id_kelas'],
+            $idSemester,
+            $validated['jenis_ujian'],
+            $this->ujianId,
+        );
+
+        if ($bentrok && ! $bentrok->trashed()) {
+            $this->addError('id_kelas', JadwalUjianDuplikat::pesanBentrokHidup());
 
             return null;
         }
 
-        $actor = $user ? ((string) ($user->name ?? $user->id)) : 'system';
+        if ($bentrok) {
+            // Bentrok dengan jadwal terhapus: tawarkan pulihkan / hapus permanen lewat modal,
+            // bukan menolak mentah-mentah — admin tidak punya cara lain melihat baris itu.
+            $this->duplikatTerhapusId = (int) $bentrok->id;
+
+            return null;
+        }
+
+        $actor = $this->actor();
 
         $data = [
             'id_kelas' => $validated['id_kelas'],
@@ -209,10 +312,19 @@ class Form extends Component
             'tanggal_selesai' => $this->tanggal_selesai !== '' ? $this->tanggal_selesai : null,
         ];
 
-        if ($this->ujianId) {
-            Ujian::findOrFail($this->ujianId)->update($data + ['updated_by' => $actor]);
-        } else {
-            Ujian::create($data + ['created_by' => $actor, 'updated_by' => $actor]);
+        // Jaring pengaman untuk balapan: dua admin menyimpan kombinasi sama nyaris bersamaan,
+        // keduanya lolos cek di atas, lalu yang kalah menabrak unique di database. Tetap pesan
+        // yang bisa dibaca, bukan 500.
+        try {
+            if ($this->ujianId) {
+                Ujian::findOrFail($this->ujianId)->update($data + ['updated_by' => $actor]);
+            } else {
+                Ujian::create($data + ['created_by' => $actor, 'updated_by' => $actor]);
+            }
+        } catch (UniqueConstraintViolationException) {
+            $this->addError('id_kelas', JadwalUjianDuplikat::pesanBentrokHidup());
+
+            return null;
         }
 
         session()->flash('status', 'Jadwal ujian berhasil disimpan.');
