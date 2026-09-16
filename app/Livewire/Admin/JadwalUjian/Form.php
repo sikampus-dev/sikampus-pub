@@ -86,6 +86,12 @@ class Form extends Component
         $this->id_kelas = null;
     }
 
+    /**
+     * Tidak dibatasi limit() — sudah disaring lewat scope prodi user plus filterProdi/filterSemester
+     * di form, jadi hasilnya bounded oleh filter itu sendiri, bukan angka arbitrer. Regresi yang
+     * sudah pernah diperbaiki di App\Livewire\Admin\Jadwal\Form::kelasOptions() — kombinasi
+     * prodi+semester dengan lebih dari 200 kelas kehilangan sisanya begitu saja kalau dibatasi.
+     */
     #[Computed]
     public function kelasOptions()
     {
@@ -106,7 +112,7 @@ class Form extends Component
             $query->where('id_semester', $this->filterSemester);
         }
 
-        return $query->orderBy('id')->limit(200)->get()->map(fn (Kelas $k) => (object) [
+        return $query->orderBy('id')->get()->map(fn (Kelas $k) => (object) [
             'id' => $k->id,
             'label' => trim(($k->kurikulumMatkul?->matkul?->kode ? "{$k->kurikulumMatkul->matkul->kode} - " : '').($k->kurikulumMatkul?->matkul?->nama ?? 'Kelas').($k->semester ? " ({$k->semester->nama} {$k->semester->kode})" : '')),
         ]);
