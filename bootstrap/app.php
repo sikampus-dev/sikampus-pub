@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\PenghapusanDiblokir;
 use App\Http\Middleware\EnforceImpersonationTimeout;
 use App\Http\Middleware\EnsureAppIsInstalled;
 use App\Http\Middleware\EnsureAppIsNotInstalled;
@@ -152,5 +153,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // agar tidak redirect ke route('login') yang tidak ada di API.
         $exceptions->shouldRenderJsonWhen(function ($request, $e) {
             return $request->is('api/*') || $request->expectsJson();
+        });
+
+        // Soft delete yang ditolak AturanHapusBerantai: 422 dengan rincian pemakainya, bukan 500.
+        // Komponen Livewire ditangani terpisah lewat hook `exception` di AppServiceProvider.
+        $exceptions->render(function (PenghapusanDiblokir $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'dipakai_oleh' => $e->pemakai,
+                ], 422);
+            }
+
+            return back()->with('error', $e->getMessage());
         });
     })->create();

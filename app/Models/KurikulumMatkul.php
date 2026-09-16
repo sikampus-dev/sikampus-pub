@@ -2,13 +2,22 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AturanHapusBerantai;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class KurikulumMatkul extends Model
 {
-    use HasFactory, SoftDeletes;
+    use AturanHapusBerantai, HasFactory, SoftDeletes;
+
+    /** Anak yang ikut di-soft-delete dan dipulihkan bersama baris ini (lihat AturanHapusBerantai). */
+    protected array $hapusBerantai = ['bobotPenilaian'];
+
+    /** Anak berisi riwayat yang, selama masih hidup, menolak baris ini dihapus. */
+    protected array $hapusDiblokirOleh = [
+        'kelas' => 'kelas',
+    ];
 
     protected $table = 'kurikulum_matkul';
 
@@ -72,5 +81,10 @@ class KurikulumMatkul extends Model
     public function sksLabel(): ?int
     {
         return $this->sks ?? $this->matkul?->sks;
+    }
+
+    public function kelas()
+    {
+        return $this->hasMany(Kelas::class, 'id_kurikulum_matkul');
     }
 }

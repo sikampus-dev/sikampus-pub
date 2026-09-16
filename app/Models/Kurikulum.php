@@ -2,15 +2,25 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\AturanHapusBerantai;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Kurikulum extends Model
 {
-    use HasFactory, SoftDeletes;
+    use AturanHapusBerantai, HasFactory, SoftDeletes;
+
+    /** Anak yang ikut di-soft-delete dan dipulihkan bersama baris ini (lihat AturanHapusBerantai). */
+    protected array $hapusBerantai = ['kurikulumMatkul'];
+
+    /** Anak berisi riwayat yang, selama masih hidup, menolak baris ini dihapus. */
+    protected array $hapusDiblokirOleh = [
+        'konversiNilai' => 'konversi nilai',
+    ];
 
     protected $table = 'kurikulum';
+
     protected $fillable = [
         'id_prodi',
         'kode',
@@ -20,7 +30,9 @@ class Kurikulum extends Model
         'status',
         'deskripsi',
     ];
+
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
+
     protected $casts = [
         'id_prodi' => 'integer',
         'id_tahun_berlaku' => 'integer',
@@ -41,8 +53,17 @@ class Kurikulum extends Model
     public function matkuls()
     {
         return $this->belongsToMany(Matkul::class, 'kurikulum_matkul', 'id_kurikulum', 'id_matkul')
-                    ->withPivot('id', 'kode_matkul', 'nama_matkul', 'nama_matkul_en', 'sks', 'semester_rekomendasi', 'is_wajib')
-                    ->withTimestamps();
+            ->withPivot('id', 'kode_matkul', 'nama_matkul', 'nama_matkul_en', 'sks', 'semester_rekomendasi', 'is_wajib')
+            ->withTimestamps();
+    }
+
+    public function kurikulumMatkul()
+    {
+        return $this->hasMany(KurikulumMatkul::class, 'id_kurikulum');
+    }
+
+    public function konversiNilai()
+    {
+        return $this->hasMany(KonversiNilai::class, 'id_kurikulum');
     }
 }
-

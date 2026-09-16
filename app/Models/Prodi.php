@@ -2,20 +2,28 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\AturanHapusBerantai;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Fakultas;
-use App\Models\Dosen;
-use App\Models\Jenjang;
-use App\Models\Semester;
-use Illuminate\Contracts\Database\Query\Builder;
 
 class Prodi extends Model
 {
-    use HasFactory, SoftDeletes;
+    use AturanHapusBerantai, HasFactory, SoftDeletes;
+
+    /** Anak yang ikut di-soft-delete dan dipulihkan bersama baris ini (lihat AturanHapusBerantai). */
+    protected array $hapusBerantai = [];
+
+    /** Anak berisi riwayat yang, selama masih hidup, menolak baris ini dihapus. */
+    protected array $hapusDiblokirOleh = [
+        'mahasiswa' => 'mahasiswa',
+        'kelas' => 'kelas',
+        'kurikulum' => 'kurikulum',
+        'matkul' => 'mata kuliah',
+    ];
 
     protected $table = 'prodi';
+
     protected $fillable = [
         'nama',
         'nama_en',
@@ -44,7 +52,9 @@ class Prodi extends Model
         'is_pmb_open',
         'status',
     ];
+
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
+
     protected $casts = [
         'id_fakultas' => 'integer',
         'id_kaprodi' => 'integer',
@@ -81,5 +91,25 @@ class Prodi extends Model
     public function semesterAktif()
     {
         return $this->belongsTo(Semester::class, 'id_semester_aktif');
+    }
+
+    public function mahasiswa()
+    {
+        return $this->hasMany(Mahasiswa::class, 'id_prodi');
+    }
+
+    public function kelas()
+    {
+        return $this->hasMany(Kelas::class, 'id_prodi');
+    }
+
+    public function kurikulum()
+    {
+        return $this->hasMany(Kurikulum::class, 'id_prodi');
+    }
+
+    public function matkul()
+    {
+        return $this->hasMany(Matkul::class, 'id_prodi');
     }
 }

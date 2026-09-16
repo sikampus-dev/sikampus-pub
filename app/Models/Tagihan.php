@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AturanHapusBerantai;
 use App\Models\Concerns\MencatatPelaku;
 use App\Services\StatusPembayaranTagihan;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +11,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Tagihan extends Model
 {
-    use HasFactory, MencatatPelaku, SoftDeletes;
+    use AturanHapusBerantai, HasFactory, MencatatPelaku, SoftDeletes;
+
+    /** Anak yang ikut di-soft-delete dan dipulihkan bersama baris ini (lihat AturanHapusBerantai). */
+    protected array $hapusBerantai = ['tagihanRinci', 'pembayaranBelumDisetujui'];
+
+    /** Anak berisi riwayat yang, selama masih hidup, menolak baris ini dihapus. */
+    protected array $hapusDiblokirOleh = [
+        'pembayaranDisetujui' => 'pembayaran yang sudah disetujui',
+    ];
 
     protected $table = 'tagihan';
 
@@ -73,5 +82,20 @@ class Tagihan extends Model
         $totalDisetujui = (float) Pembayaran::approvedQueryForTagihan((int) $this->id)->sum('nominal');
 
         return $totalDisetujui + StatusPembayaranTagihan::TOLERANSI >= (float) $this->total;
+    }
+
+    /**
+     * Dipisah dua supaya aturan hapusnya berbeda: pembayaran yang sudah disetujui adalah uang yang
+     * benar-benar diterima (menahan penghapusan tagihan), sedangkan yang belum disetujui hanya
+     * pengajuan yang tidak berarti tanpa tagihannya (ikut terhapus bersama tagihan).
+     */
+    public function pembayaranDisetujui()
+    {
+        return $this->hasMany(Pembayaran::class, 'id_tagihan')->whereNotNull('approved_at');
+    }
+
+    public function pembayaranBelumDisetujui()
+    {
+        return $this->hasMany(Pembayaran::class, 'id_tagihan')->whereNull('approved_at');
     }
 }

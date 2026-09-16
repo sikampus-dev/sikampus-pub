@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Kelas;
 
+use App\Exceptions\PenghapusanDiblokir;
 use App\Livewire\Admin\Kelas\Concerns\ForwardsIndexState;
 use App\Models\Jadwal;
 use App\Models\Kelas;
@@ -9,6 +10,7 @@ use App\Models\Krs;
 use App\Models\Perkuliahan;
 use App\Models\Semester;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -185,13 +187,28 @@ class Show extends Component
         $kelas = Kelas::findOrFail($this->kelasId);
         $this->ensureAccess($kelas);
 
-        $count = Jadwal::where('id_kelas', $this->kelasId)
+        $jadwalList = Jadwal::where('id_kelas', $this->kelasId)
             ->whereIn('id', $this->selectedJadwalIds)
-            ->count();
+            ->get();
+        $count = $jadwalList->count();
 
-        Jadwal::where('id_kelas', $this->kelasId)
-            ->whereIn('id', $this->selectedJadwalIds)
-            ->delete();
+        // Per model, bukan Jadwal::where()->delete(): hapus lewat query builder melewati event
+        // model, sehingga AturanHapusBerantai tidak jalan — pertemuan perkuliahan tidak menahan
+        // penghapusan dan dosen/materi/tugas jadwal itu tertinggal sebagai yatim. Diperiksa
+        // semua dulu supaya pilihan yang sebagian ditolak tidak terhapus setengah jalan.
+        $pemakai = [];
+        foreach ($jadwalList as $jadwal) {
+            foreach ($jadwal->pemakaiYangMemblokirHapus() as $label => $jumlah) {
+                $pemakai[$label] = ($pemakai[$label] ?? 0) + $jumlah;
+            }
+        }
+        if ($pemakai !== []) {
+            $this->confirmingBulkDelete = false;
+
+            throw new PenghapusanDiblokir($pemakai);
+        }
+
+        DB::transaction(fn () => $jadwalList->each->delete());
 
         $this->selectedJadwalIds = [];
         $this->confirmingBulkDelete = false;

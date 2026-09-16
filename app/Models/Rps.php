@@ -2,15 +2,22 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\AturanHapusBerantai;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Rps extends Model
 {
-    use HasFactory, SoftDeletes;
+    use AturanHapusBerantai, HasFactory, SoftDeletes;
+
+    /** Anak yang ikut di-soft-delete dan dipulihkan bersama baris ini (lihat AturanHapusBerantai). */
+    protected array $hapusBerantai = ['rpsCpl', 'rpsCpmk', 'rpsPembelajaran'];
+
+    /** Anak berisi riwayat yang, selama masih hidup, menolak baris ini dihapus. */
+    protected array $hapusDiblokirOleh = [];
 
     protected $table = 'rps';
 

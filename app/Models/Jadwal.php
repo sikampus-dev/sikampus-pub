@@ -2,13 +2,22 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AturanHapusBerantai;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Jadwal extends Model
 {
-    use HasFactory, SoftDeletes;
+    use AturanHapusBerantai, HasFactory, SoftDeletes;
+
+    /** Anak yang ikut di-soft-delete dan dipulihkan bersama baris ini (lihat AturanHapusBerantai). */
+    protected array $hapusBerantai = ['dosen', 'materiPerkuliahan', 'tugas'];
+
+    /** Anak berisi riwayat yang, selama masih hidup, menolak baris ini dihapus. */
+    protected array $hapusDiblokirOleh = [
+        'perkuliahan' => 'pertemuan perkuliahan',
+    ];
 
     protected $table = 'jadwal';
 
@@ -80,5 +89,10 @@ class Jadwal extends Model
     public function tugas()
     {
         return $this->hasMany(Tugas::class, 'id_jadwal');
+    }
+
+    public function perkuliahan()
+    {
+        return $this->hasMany(Perkuliahan::class, 'id_jadwal');
     }
 }

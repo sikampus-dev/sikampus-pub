@@ -271,5 +271,40 @@
     document.addEventListener('livewire:navigated', renderLucideIcons);
 </script>
 @stack('scripts')
+
+{{-- Peringatan untuk soft delete yang ditolak AturanHapusBerantai ("masih dipakai oleh ...").
+     Dikirim dari hook Livewire `exception` di AppServiceProvider, jadi berlaku untuk semua tombol
+     hapus di panel ini tanpa tiap komponen menanganinya sendiri. --}}
+<div
+    x-data="{ pesan: '' }"
+    x-on:hapus-diblokir.window="pesan = $event.detail.pesan"
+    x-show="pesan !== ''"
+    style="display: none"
+    x-transition.opacity
+    class="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-900/40 px-4"
+    role="alertdialog"
+    aria-modal="true"
+>
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-border-lg" x-on:click.outside="pesan = ''">
+        <div class="flex gap-3">
+            <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </span>
+            <div>
+                <h3 class="text-base font-semibold text-neutral-900">Tidak bisa dihapus</h3>
+                <p class="mt-2 text-sm text-neutral-600" x-text="pesan"></p>
+            </div>
+        </div>
+        <div class="mt-6 flex justify-end">
+            <button
+                type="button"
+                x-on:click="pesan = ''"
+                class="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+                Mengerti
+            </button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

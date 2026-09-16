@@ -2,31 +2,29 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\AturanHapusBerantai;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\User;
-use App\Models\Prodi;
-use App\Models\JalurMasuk;
-use App\Models\JenisDaftar;
-use App\Models\Kota;
-use App\Models\Provinsi;
-use App\Models\Negara;
-use App\Models\KelompokKelas;
-use App\Models\GrupMahasiswa;
-use App\Models\StatusAkademik;
-use App\Models\Semester;
-use App\Models\Pendidikan;
-use App\Models\Pekerjaan;
-use App\Models\Penghasilan;
-use App\Models\Krs;
-use App\Models\KategoriBiayaMahasiswa;
 
 class Mahasiswa extends Model
 {
-    use HasFactory, SoftDeletes;
+    use AturanHapusBerantai, HasFactory, SoftDeletes;
+
+    /** Anak yang ikut di-soft-delete dan dipulihkan bersama baris ini (lihat AturanHapusBerantai). */
+    protected array $hapusBerantai = [];
+
+    /** Anak berisi riwayat yang, selama masih hidup, menolak baris ini dihapus. */
+    protected array $hapusDiblokirOleh = [
+        'krs' => 'KRS',
+        'tagihan' => 'tagihan',
+        'yudisium' => 'data yudisium',
+        'wisudaMahasiswa' => 'data wisuda',
+        'konversiNilai' => 'konversi nilai',
+    ];
 
     protected $table = 'mahasiswa';
+
     protected $fillable = [
         'id_user',
         'nama',
@@ -85,7 +83,9 @@ class Mahasiswa extends Model
         'id_jalur_masuk',
         'id_jenis_daftar',
     ];
+
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
+
     protected $casts = [
         'id_user' => 'integer',
         'id_semester_masuk' => 'integer',
@@ -176,7 +176,7 @@ class Mahasiswa extends Model
     {
         return $this->belongsTo(Pekerjaan::class, 'id_pekerjaan_ayah');
     }
-    
+
     public function penghasilan_ayah()
     {
         return $this->belongsTo(Penghasilan::class, 'id_penghasilan_ayah');
@@ -237,4 +237,18 @@ class Mahasiswa extends Model
         return $this->hasOne(Ktm::class, 'id_mahasiswa');
     }
 
+    public function tagihan()
+    {
+        return $this->hasMany(Tagihan::class, 'id_mahasiswa');
+    }
+
+    public function yudisium()
+    {
+        return $this->hasMany(Yudisium::class, 'id_mahasiswa');
+    }
+
+    public function wisudaMahasiswa()
+    {
+        return $this->hasMany(WisudaMahasiswa::class, 'id_mahasiswa');
+    }
 }

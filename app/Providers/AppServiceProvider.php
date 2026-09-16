@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Exceptions\PenghapusanDiblokir;
 use App\Models\Dosen;
 use App\Models\Mahasiswa;
 use App\Models\Prodi;
@@ -72,6 +73,28 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Soft delete yang ditolak AturanHapusBerantai di komponen Livewire mana pun: tampilkan
+        // peringatan (layouts/web.blade.php mendengarkan event ini) alih-alih halaman error 500.
+        // Dipasang global, bukan per tombol hapus, supaya jalur hapus yang ditambahkan nanti tidak
+        // bisa lupa menanganinya.
+        \Livewire\on('exception', function ($component, \Throwable $e, callable $stopPropagation): void {
+            if (! $e instanceof PenghapusanDiblokir) {
+                return;
+            }
+
+            $stopPropagation();
+
+            // Tutup modal konfirmasi hapus yang masih terbuka — kedua nama ini yang dipakai
+            // komponen admin — supaya peringatannya tidak tertutup modal.
+            foreach (['confirmingDeleteId', 'confirmDeleteId'] as $properti) {
+                if (property_exists($component, $properti)) {
+                    $component->{$properti} = null;
+                }
+            }
+
+            $component->dispatch('hapus-diblokir', pesan: $e->getMessage());
+        });
+
         // Pengaturan SMTP (menu Pengaturan > Sistem > SMTP) disimpan di tabel settings (prefix
         // app_mail_*), bukan .env — supaya berlaku di semua instance/container tanpa perlu akses
         // filesystem, dan tetap kepakai walau config di-cache (php artisan config:cache), karena
