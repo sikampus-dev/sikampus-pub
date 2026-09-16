@@ -30,7 +30,7 @@
         Import KRS
     </a>
     <a
-        href="{{ route('admin.akademik.krs.create') }}"
+        href="{{ route('admin.akademik.krs.create') }}{{ $returnQuery ? '?'.$returnQuery : '' }}"
         class="inline-flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800"
     >
         <i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>
@@ -125,7 +125,7 @@
                             <td class="px-4 py-3 text-center font-medium text-neutral-900">{{ $row['sks_diacc'] }}</td>
                             <td class="px-4 py-3 text-right">
                                 <a
-                                    href="{{ route('admin.akademik.krs.show', $row['id_mahasiswa']) }}"
+                                    href="{{ route('admin.akademik.krs.show', $row['id_mahasiswa']) }}{{ $returnQuery ? '?'.$returnQuery : '' }}"
                                     class="inline-flex items-center justify-center rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                                     title="Lihat Detail"
                                 >

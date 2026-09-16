@@ -9,7 +9,8 @@
 @section('breadcrumb')
     @include('admin.partials.breadcrumb', ['items' => [
         ['label' => 'Akademik'],
-        ['label' => 'KRS', 'route' => route('admin.akademik.krs')],
+        ['label' => 'KRS', 'route' => $backUrl],
+        ...($krsId ? [['label' => $mahasiswaNama ?: 'Detail', 'route' => $cancelUrl]] : []),
         ['label' => $krsId ? 'Ubah' : 'Tambah'],
     ]])
 @endsection
@@ -209,7 +210,7 @@
         @endif
 
         <div class="flex items-center justify-end gap-3">
-            <a href="{{ route('admin.akademik.krs') }}" class="rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
+            <a href="{{ $cancelUrl }}" class="rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
                 Batal
             </a>
             @if ($krsId || $selectedMahasiswaId)

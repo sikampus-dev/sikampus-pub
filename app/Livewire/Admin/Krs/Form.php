@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Krs;
 
+use App\Livewire\Admin\Krs\Concerns\ForwardsIndexState;
 use App\Models\Kelas;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
@@ -13,8 +14,20 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    use ForwardsIndexState;
+
     // ---- Mode: null = create (batch multi-kelas), diisi = edit (satu baris krs) ----
     public ?int $krsId = null;
+
+    /**
+     * Tujuan tombol Batal. Mode edit dibuka dari halaman detail KRS satu mahasiswa, jadi Batal
+     * kembali ke detail itu — bukan ke Index, yang membuat admin kehilangan mahasiswa yang sedang
+     * ia periksa. Mode create dibuka dari Index, jadi kembali ke Index.
+     */
+    public string $cancelUrl = '';
+
+    /** Mode edit: id mahasiswa pemilik baris KRS, untuk URL detail. */
+    public ?int $editMahasiswaId = null;
 
     public string $submitError = '';
 
@@ -54,6 +67,8 @@ class Form extends Component
     public function mount(?int $id = null): void
     {
         $this->krsId = $id;
+        $this->resolveBackUrl();
+        $this->cancelUrl = $this->backUrl;
 
         if ($id === null) {
             $this->krs = [['id_kelas' => null, 'status' => 'pending']];
@@ -86,6 +101,9 @@ class Form extends Component
 
         $mahasiswa = $krs->mahasiswa;
         $matkul = $krs->kelas->kurikulumMatkul->matkul ?? null;
+
+        $this->editMahasiswaId = (int) $krs->id_mahasiswa;
+        $this->cancelUrl = $this->urlDetail();
 
         $this->editMahasiswaProdiId = $mahasiswa->id_prodi ?? null;
         $this->mahasiswaNim = $mahasiswa->nim ?? '';
@@ -326,7 +344,7 @@ class Form extends Component
 
         session()->flash('status', "{$createdCount} data KRS berhasil dibuat.");
 
-        return redirect()->route('admin.akademik.krs');
+        return redirect($this->backUrl);
     }
 
     /**
@@ -386,7 +404,13 @@ class Form extends Component
 
         session()->flash('status', 'Data KRS berhasil diperbarui.');
 
-        return redirect()->route('admin.akademik.krs.show', $krs->id_mahasiswa);
+        return redirect($this->urlDetail());
+    }
+
+    /** URL detail KRS mahasiswa (mode edit), membawa state Index supaya Kembali di sana tetap benar. */
+    private function urlDetail(): string
+    {
+        return $this->urlDenganState(route('admin.akademik.krs.show', $this->editMahasiswaId));
     }
 
     public function render()

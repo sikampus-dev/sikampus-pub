@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Krs;
 
+use App\Livewire\Admin\Krs\Concerns\ForwardsIndexState;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
 use App\Models\Semester;
@@ -13,6 +14,8 @@ use Livewire\Component;
 
 class Show extends Component
 {
+    use ForwardsIndexState;
+
     public int $mahasiswaId;
 
     public string $filterSemester = '';
@@ -22,6 +25,7 @@ class Show extends Component
     public function mount(int $id): void
     {
         $this->mahasiswaId = $id;
+        $this->resolveBackUrl();
 
         $mahasiswa = Mahasiswa::findOrFail($id);
 

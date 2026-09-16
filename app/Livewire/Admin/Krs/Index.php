@@ -12,6 +12,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -19,12 +20,20 @@ class Index extends Component
 {
     use WithPagination;
 
+    // #[Url] supaya state ini bisa dibaca ulang lewat query string ketika user kembali dari
+    // halaman detail/ubah (lihat Krs\Concerns\ForwardsIndexState). `page` sudah ditangani
+    // WithPagination; filter tidak — tanpa ini, kembali ke ?page=3 memulihkan halamannya tapi
+    // membuang filternya, sehingga yang tampil halaman 3 dari daftar yang lain.
+    #[Url(as: 'search')]
     public string $search = '';
 
+    #[Url(as: 'id_prodi')]
     public string $filterProdi = '';
 
+    #[Url(as: 'id_semester')]
     public string $filterSemester = '';
 
+    #[Url(as: 'status')]
     public string $filterStatusPengajuan = '';
 
     public int $perPage = 10;
@@ -260,6 +269,21 @@ class Index extends Component
     }
 
     /**
+     * Query string state Index untuk diteruskan ke link Detail — dibaca kembali oleh
+     * Krs\Concerns\ForwardsIndexState. Kunci harus sama dengan alias #[Url] di atas.
+     */
+    private function returnQuery(int $halaman): string
+    {
+        return http_build_query(array_filter([
+            'search' => $this->search !== '' ? $this->search : null,
+            'id_prodi' => $this->filterProdi !== '' ? $this->filterProdi : null,
+            'id_semester' => $this->filterSemester !== '' ? $this->filterSemester : null,
+            'status' => $this->filterStatusPengajuan !== '' ? $this->filterStatusPengajuan : null,
+            'page' => $halaman > 1 ? $halaman : null,
+        ], fn ($value) => $value !== null));
+    }
+
+    /**
      * Sama persis dengan KrsController::index — dua cabang query disalin apa adanya
      * (bukan diekstrak jadi shared service, mengikuti pola modul lain).
      */
@@ -282,6 +306,7 @@ class Index extends Component
             return view('livewire.admin.krs.index', [
                 'krsList' => $krsList,
                 'belumMengajukanError' => $belumMengajukanError,
+                'returnQuery' => $this->returnQuery($page),
             ])->extends('layouts.web');
         }
 
@@ -316,6 +341,7 @@ class Index extends Component
         return view('livewire.admin.krs.index', [
             'krsList' => $krsList,
             'belumMengajukanError' => $belumMengajukanError,
+            'returnQuery' => $this->returnQuery($krsList->currentPage()),
         ])->extends('layouts.web');
     }
 }

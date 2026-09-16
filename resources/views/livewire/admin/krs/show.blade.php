@@ -10,14 +10,14 @@
 @section('breadcrumb')
     @include('admin.partials.breadcrumb', ['items' => [
         ['label' => 'Akademik'],
-        ['label' => 'KRS', 'route' => route('admin.akademik.krs')],
+        ['label' => 'KRS', 'route' => $backUrl],
         ['label' => $this->mahasiswa->nama],
     ]])
 @endsection
 
 @section('page_actions')
     <a
-        href="{{ route('admin.akademik.krs') }}"
+        href="{{ $backUrl }}"
         class="print:hidden inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border"
     >
         <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
@@ -143,7 +143,7 @@
                             <td class="print:hidden px-4 py-3 text-right">
                                 <div class="inline-flex items-center gap-1">
                                     <a
-                                        href="{{ route('admin.akademik.krs.edit', $krs->id) }}"
+                                        href="{{ route('admin.akademik.krs.edit', $krs->id) }}{{ $returnQuery ? '?'.$returnQuery : '' }}"
                                         class="inline-flex items-center justify-center rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                                         title="Ubah"
                                     >
