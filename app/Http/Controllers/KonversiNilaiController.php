@@ -323,7 +323,7 @@ class KonversiNilaiController extends Controller
 
         try {
             $nilai = DB::transaction(function () use ($k, $rentang, $sksBaru, $actor) {
-                $nilai = Nilai::create([
+                $atribut = [
                     'id_krs' => null,
                     'id_konversi_nilai' => $k->id,
                     'sks' => $sksBaru,
@@ -332,7 +332,15 @@ class KonversiNilaiController extends Controller
                     'is_final' => true,
                     'revisi' => 0,
                     'created_by' => $actor,
-                ]);
+                ];
+
+                // Nilai soft-deleted dipulihkan: unique id_konversi_nilai ikut menghitungnya.
+                $nilai = Nilai::pulihkanUntukKonversiBaru($k->id);
+                if ($nilai) {
+                    $nilai->update($atribut);
+                } else {
+                    $nilai = Nilai::create($atribut);
+                }
 
                 $k->id_nilai = $nilai->id;
                 $k->updated_by = $actor;

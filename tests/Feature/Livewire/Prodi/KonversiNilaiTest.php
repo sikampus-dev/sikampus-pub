@@ -224,6 +224,44 @@ it('rejects transfer when the konversi is already linked to an existing nilai', 
         ->assertSee('sudah terhubung ke data nilai');
 });
 
+it('restores the soft-deleted nilai of the konversi instead of hitting the unique id_konversi_nilai constraint', function () {
+    $jenjang = Jenjang::factory()->create();
+    $prodi = Prodi::factory()->create(['id_jenjang' => $jenjang->id]);
+    RentangNilai::factory()->create(['id_jenjang' => $jenjang->id, 'nilai_huruf' => 'B', 'nilai_angka' => 3]);
+    $mhs = Mahasiswa::factory()->create(['id_prodi' => $prodi->id]);
+    $konversi = KonversiNilai::factory()->create(['id_mahasiswa' => $mhs->id, 'is_approved' => true, 'nilai_baru' => 'B', 'sks_baru' => 2]);
+    $lama = Nilai::factory()->create([
+        'id_krs' => null,
+        'id_konversi_nilai' => $konversi->id,
+        'sks' => 4,
+        'angka_mutu' => 1,
+        'huruf_mutu' => 'D',
+        'revisi' => 5,
+    ]);
+    $konversi->update(['id_nilai' => $lama->id]);
+    $lama->delete();
+    $lama->forceFill(['deleted_by' => 'penghapus'])->saveQuietly();
+    $kaprodi = kaprodiUser($prodi);
+
+    Livewire::actingAs($kaprodi)
+        ->test(Index::class)
+        ->call('openDetailModal', $konversi->id)
+        ->call('transferToNilai')
+        ->assertSet('transferError', '')
+        ->assertSee('berhasil ditransfer');
+
+    expect(Nilai::withTrashed()->where('id_konversi_nilai', $konversi->id)->count())->toBe(1);
+    $nilai = Nilai::find($lama->id);
+    expect($nilai)->not->toBeNull()
+        ->and($nilai->deleted_by)->toBeNull()
+        ->and($nilai->huruf_mutu)->toBe('B')
+        ->and((int) $nilai->angka_mutu)->toBe(3)
+        ->and($nilai->sks)->toBe(2)
+        ->and($nilai->revisi)->toBe(0)
+        ->and($nilai->is_final)->toBeTrue()
+        ->and($konversi->fresh()->id_nilai)->toBe($lama->id);
+});
+
 it('redirects unauthenticated users to the login page', function () {
     $this->get(route('prodi.konversi-nilai'))->assertRedirect(route('login'));
 });
