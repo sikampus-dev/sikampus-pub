@@ -5,16 +5,29 @@ use App\Livewire\Admin\Kelas\Index;
 use App\Livewire\Admin\Kelas\Show;
 use App\Models\Dosen;
 use App\Models\Jadwal;
+use App\Models\JadwalDosen;
 use App\Models\Jenjang;
+use App\Models\Kehadiran;
 use App\Models\Kelas;
 use App\Models\KelasDosen;
 use App\Models\KelompokKelas;
 use App\Models\Krs;
 use App\Models\KurikulumMatkul;
+use App\Models\Mahasiswa;
+use App\Models\MateriPerkuliahan;
 use App\Models\Matkul;
+use App\Models\Perkuliahan;
 use App\Models\Prodi;
+use App\Models\Rps;
+use App\Models\RpsCpl;
+use App\Models\RpsCpmk;
+use App\Models\RpsPembelajaran;
+use App\Models\RpsSubcpmk;
 use App\Models\Ruangan;
 use App\Models\Semester;
+use App\Models\Tugas;
+use App\Models\TugasMahasiswa;
+use App\Models\Ujian;
 use Livewire\Livewire;
 
 it('renders index, create form, and show page', function () {
@@ -371,6 +384,216 @@ it('refuses to permanently delete a kelas still referenced by krs or dosen penga
     $krs->delete();
 
     KelasDosen::create(['id_kelas' => $kelas->id, 'id_dosen' => Dosen::factory()->create()->id, 'is_pic' => true]);
+
+    $kelas->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id)->trashed())->toBeTrue();
+});
+
+it('refuses to permanently delete a kelas that still has an active (not soft-deleted) jadwal', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+
+    // Kelas::$hapusBerantai men-cascade soft-delete ke jadwal begitu $kelas->delete() dipanggil,
+    // jadi untuk benar-benar mensimulasikan "kelas sudah soft-deleted tapi jadwalnya masih aktif"
+    // (mis. kelas dihapus lewat query builder yang melewati event model dan cascade-nya) dipakai
+    // Kelas::where(...)->delete() di sini, bukan $kelas->delete().
+    Kelas::where('id', $kelas->id)->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id)->trashed())->toBeTrue();
+});
+
+// Use case inti: jadwal yang sudah di-soft-delete (dan bersih dari turunan aktif) ikut dihapus
+// permanen otomatis begitu kelasnya dihapus permanen — bukan lagi diblokir mentah-mentah seperti
+// tabel lain di FORCE_DELETE_BLOCKERS.
+it('force-deletes an already soft-deleted jadwal (and its own already-trashed descendants) together with the kelas', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    $jadwal->delete();
+
+    // Turunan jadwal ini juga sudah di-soft-delete semua — jadi bersih untuk ikut dihapus permanen.
+    $dosen = Dosen::factory()->create();
+    $jadwalDosen = JadwalDosen::create(['id_jadwal' => $jadwal->id, 'id_dosen' => $dosen->id, 'status' => 'active']);
+    $jadwalDosen->delete();
+
+    $materi = MateriPerkuliahan::create(['id_jadwal' => $jadwal->id, 'nama' => 'Slide', 'file' => 'materi/slide.pdf']);
+    $materi->delete();
+
+    $perkuliahan = Perkuliahan::factory()->create(['id_jadwal' => $jadwal->id]);
+    $kehadiran = Kehadiran::factory()->create(['id_perkuliahan' => $perkuliahan->id]);
+    $kehadiran->delete();
+    $perkuliahan->delete();
+
+    $tugas = Tugas::create(['id_jadwal' => $jadwal->id, 'id_dosen' => $dosen->id, 'nama' => 'Tugas 1']);
+    $tugasMahasiswa = TugasMahasiswa::create(['id_tugas' => $tugas->id, 'id_mahasiswa' => Mahasiswa::factory()->create()->id]);
+    $tugasMahasiswa->delete();
+    $tugas->delete();
+
+    $kelas->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id))->toBeNull();
+    expect(Jadwal::withTrashed()->find($jadwal->id))->toBeNull();
+    expect(JadwalDosen::withTrashed()->find($jadwalDosen->id))->toBeNull();
+    expect(MateriPerkuliahan::withTrashed()->find($materi->id))->toBeNull();
+    expect(Perkuliahan::withTrashed()->find($perkuliahan->id))->toBeNull();
+    expect(Kehadiran::withTrashed()->find($kehadiran->id))->toBeNull();
+    expect(Tugas::withTrashed()->find($tugas->id))->toBeNull();
+    expect(TugasMahasiswa::withTrashed()->find($tugasMahasiswa->id))->toBeNull();
+});
+
+it('refuses to permanently delete the kelas when a soft-deleted jadwal has a trashed tugas with an active pengumpulan tugas mahasiswa underneath', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    $jadwal->delete();
+
+    $tugas = Tugas::create(['id_jadwal' => $jadwal->id, 'id_dosen' => Dosen::factory()->create()->id, 'nama' => 'Tugas 1']);
+    TugasMahasiswa::create(['id_tugas' => $tugas->id, 'id_mahasiswa' => Mahasiswa::factory()->create()->id]);
+
+    // Tugas::$hapusDiblokirOleh menolak $tugas->delete() selama tugasMahasiswa masih aktif — dipakai
+    // query builder di sini (sama seperti test jadwal/rps aktif di atas) supaya benar-benar bisa
+    // mensimulasikan "tugas sudah soft-deleted tapi pengumpulannya masih aktif".
+    Tugas::where('id', $tugas->id)->delete();
+
+    $kelas->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id)->trashed())->toBeTrue();
+});
+
+it('force-deletes a soft-deleted kelas_dosen and ujian together with the kelas (both are leaves)', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+
+    $kelasDosen = KelasDosen::create(['id_kelas' => $kelas->id, 'id_dosen' => Dosen::factory()->create()->id, 'is_pic' => true]);
+    $kelasDosen->delete();
+
+    $ujian = Ujian::factory()->create(['id_kelas' => $kelas->id]);
+    $ujian->delete();
+
+    $kelas->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id))->toBeNull();
+    expect(KelasDosen::withTrashed()->find($kelasDosen->id))->toBeNull();
+    expect(Ujian::withTrashed()->find($ujian->id))->toBeNull();
+});
+
+it('force-deletes a soft-deleted rps and its entire tree (cpl, cpmk, subcpmk, pembelajaran) together with the kelas', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+
+    $rps = Rps::create(['id_kelas' => $kelas->id]);
+    $cpl = RpsCpl::create(['id_rps' => $rps->id, 'cpl' => 'CPL 1']);
+    $cpmk = RpsCpmk::create(['id_rps' => $rps->id, 'cpmk' => 'CPMK 1']);
+    $subcpmk = RpsSubcpmk::create(['id_cpmk' => $cpmk->id, 'subcpmk' => 'Subcpmk 1']);
+    $pembelajaran = RpsPembelajaran::create(['id_rps' => $rps->id, 'urutan_pertemuan' => 1]);
+
+    // Sesuai AturanHapusBerantai::hapusAnakBerantai() sungguhan — $rps->delete() akan men-cascade
+    // seluruh pohon ini otomatis. Dipanggil manual di sini biar tesnya tidak bergantung urutan
+    // cascade nyata trait itu, cukup pastikan hasil akhirnya semua sudah soft-deleted.
+    $subcpmk->delete();
+    $cpmk->delete();
+    $cpl->delete();
+    $pembelajaran->delete();
+    $rps->delete();
+
+    $kelas->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id))->toBeNull();
+    expect(Rps::withTrashed()->find($rps->id))->toBeNull();
+    expect(RpsCpl::withTrashed()->find($cpl->id))->toBeNull();
+    expect(RpsCpmk::withTrashed()->find($cpmk->id))->toBeNull();
+    expect(RpsSubcpmk::withTrashed()->find($subcpmk->id))->toBeNull();
+    expect(RpsPembelajaran::withTrashed()->find($pembelajaran->id))->toBeNull();
+});
+
+it('refuses to permanently delete a kelas that still has an active (not soft-deleted) rps', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    Rps::create(['id_kelas' => $kelas->id]);
+
+    // Sama seperti test jadwal aktif di atas — Kelas::where(...)->delete() melewati cascade
+    // AturanHapusBerantai supaya rps-nya benar-benar tetap aktif walau kelasnya sudah soft-deleted.
+    Kelas::where('id', $kelas->id)->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id)->trashed())->toBeTrue();
+});
+
+it('refuses to permanently delete the kelas when a soft-deleted jadwal still has an active dosen pengampu', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    $jadwal->delete();
+
+    // id_dosen masih aktif (belum dihapus) — jadwal ini tidak boleh ikut dihapus permanen.
+    JadwalDosen::create(['id_jadwal' => $jadwal->id, 'id_dosen' => Dosen::factory()->create()->id, 'status' => 'active']);
+
+    $kelas->delete();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('showTrashed', true)
+        ->call('confirmForceDelete', $kelas->id)
+        ->call('forceDeleteKelas');
+
+    expect(Kelas::withTrashed()->find($kelas->id)->trashed())->toBeTrue();
+    expect(Jadwal::withTrashed()->find($jadwal->id))->not->toBeNull();
+});
+
+it('refuses to permanently delete the kelas when a soft-deleted jadwal has a trashed perkuliahan with an active kehadiran underneath', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    $jadwal->delete();
+
+    // Perkuliahan-nya sudah dihapus, tapi kehadiran mahasiswa di baliknya masih aktif — rantai
+    // turunan ini harus tetap memblokir, bukan cuma cek satu level di bawah jadwal.
+    $perkuliahan = Perkuliahan::factory()->create(['id_jadwal' => $jadwal->id]);
+    Kehadiran::factory()->create(['id_perkuliahan' => $perkuliahan->id]);
+    $perkuliahan->delete();
 
     $kelas->delete();
 

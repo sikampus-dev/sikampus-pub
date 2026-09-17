@@ -27,6 +27,20 @@ class Show extends Component
 
     public ?int $confirmDeleteId = null;
 
+    // Nilai yang sudah soft-deleted disembunyikan secara default — dinyalakan lewat toggle supaya
+    // admin bisa memulihkan atau menghapusnya permanen. Sama seperti pola di
+    // App\Livewire\Admin\Kelas\Index.
+    public bool $showTrashed = false;
+
+    public ?int $confirmForceDeleteId = null;
+
+    // Tabel yang constrained('nilai')->restrictOnDelete() — restrict itu berlaku di level baris DB
+    // apa adanya, termasuk baris yang di tabel itu sendiri sudah soft-deleted, jadi dicek lewat
+    // DB::table mentah di forceDeleteNilai(). Sama seperti FORCE_DELETE_BLOCKERS di Kelas\Index.
+    private const FORCE_DELETE_BLOCKERS = [
+        'konversi_nilai' => ['column' => 'id_nilai', 'label' => 'konversi nilai'],
+    ];
+
     public function mount(int $id): void
     {
         $this->mahasiswaId = $id;
@@ -115,6 +129,33 @@ class Show extends Component
         }
 
         return $krsList;
+    }
+
+    /**
+     * Nilai terhapus per id_krs, hanya saat toggle menyala. nilai.id_krs unik termasuk untuk baris
+     * soft-deleted, jadi satu KRS paling banyak punya satu nilai — hidup ATAU terhapus, tidak
+     * pernah keduanya. Karena itu nilai terhapus cukup ditampilkan di baris KRS-nya sendiri.
+     * Tidak ikut statistik/IPK maupun export, yang tetap hanya membaca nilai hidup.
+     */
+    #[Computed]
+    public function trashedNilaiMap()
+    {
+        if (! $this->showTrashed) {
+            return collect();
+        }
+
+        $krsIds = $this->krsList->pluck('id')->all();
+
+        return empty($krsIds)
+            ? collect()
+            : Nilai::onlyTrashed()->whereIn('id_krs', $krsIds)->get()->keyBy('id_krs');
+    }
+
+    public function updatingShowTrashed(): void
+    {
+        abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk melihat nilai yang dihapus.');
+
+        unset($this->trashedNilaiMap);
     }
 
     /**
@@ -216,6 +257,110 @@ class Show extends Component
         unset($this->krsList, $this->statistik);
 
         session()->flash('status', 'Nilai berhasil dihapus.');
+    }
+
+    /**
+     * Tidak ada padanan di NilaiController — API belum punya endpoint restore, murni fitur panel.
+     * Komponen dan revisi yang terhapus BERSAMA nilai ini ikut dipulihkan lewat AturanHapusBerantai;
+     * yang dihapus sendiri sebelumnya tetap terhapus. Tidak perlu cek bentrok unik: nilai.id_krs,
+     * nilai_komponen (id_krs, id_jenis_penilaian), dan nilai_revisi (id_krs, huruf_mutu) semuanya
+     * unik termasuk baris terhapus, jadi baris hidup pengganti mustahil ada.
+     */
+    public function restore(int $nilaiId): void
+    {
+        abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk memulihkan nilai.');
+
+        $nilai = $this->findTrashedNilaiMilikMahasiswa($nilaiId);
+
+        DB::transaction(function () use ($nilai): void {
+            $nilai->restore();
+            $nilai->deleted_by = null;
+            $nilai->save();
+        });
+
+        unset($this->krsList, $this->statistik, $this->trashedNilaiMap);
+
+        session()->flash('status', 'Nilai berhasil dipulihkan.');
+    }
+
+    public function confirmForceDelete(int $nilaiId): void
+    {
+        abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk menghapus nilai.');
+
+        $this->confirmForceDeleteId = $nilaiId;
+    }
+
+    public function cancelForceDelete(): void
+    {
+        $this->confirmForceDeleteId = null;
+    }
+
+    /**
+     * Tidak ada padanan di NilaiController — API belum punya endpoint hapus permanen, murni fitur
+     * panel. Komponen dan revisi tercatat per id_krs (bukan per id nilai), jadi foreign key tidak
+     * ikut menghapusnya: yang terhapus BERSAMA nilai ini (deleted_at identik, lihat
+     * AturanHapusBerantai) dihapus permanen di sini juga, supaya tidak tertinggal sebagai sisa
+     * yang tidak bisa dipulihkan lewat mana pun.
+     */
+    public function forceDeleteNilai(): void
+    {
+        abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk menghapus nilai.');
+
+        if (! $this->confirmForceDeleteId) {
+            return;
+        }
+
+        $nilai = $this->findTrashedNilaiMilikMahasiswa($this->confirmForceDeleteId);
+
+        $blockers = [];
+        foreach (self::FORCE_DELETE_BLOCKERS as $table => $meta) {
+            if (DB::table($table)->where($meta['column'], $nilai->id)->exists()) {
+                $blockers[] = $meta['label'];
+            }
+        }
+
+        if ($blockers !== []) {
+            session()->flash('error', 'Tidak bisa menghapus permanen nilai ini: masih tercatat di data '.implode(', ', $blockers).'. Hapus atau pindahkan data itu terlebih dahulu.');
+            $this->confirmForceDeleteId = null;
+
+            return;
+        }
+
+        DB::transaction(function () use ($nilai): void {
+            $waktuHapus = $nilai->getRawOriginal('deleted_at');
+
+            foreach (['nilaiKomponen', 'nilaiRevisi'] as $relasi) {
+                $query = $nilai->{$relasi}();
+                $query->onlyTrashed()
+                    ->where($query->getRelated()->getQualifiedDeletedAtColumn(), $waktuHapus)
+                    ->get()
+                    ->each
+                    ->forceDelete();
+            }
+
+            $nilai->forceDelete();
+        });
+
+        $this->confirmForceDeleteId = null;
+        unset($this->krsList, $this->statistik, $this->trashedNilaiMap);
+
+        session()->flash('status', 'Nilai berhasil dihapus permanen.');
+    }
+
+    /**
+     * Scope sudah dijamin lewat mount(); di sini dipastikan nilai itu memang milik mahasiswa halaman
+     * ini, supaya id nilai mahasiswa lain yang dikirim lewat request palsu tidak bisa disentuh.
+     * KRS-nya harus masih hidup — nilai yang ikut terhapus bersama KRS dipulihkan lewat KRS-nya.
+     */
+    private function findTrashedNilaiMilikMahasiswa(int $nilaiId): Nilai
+    {
+        $nilai = Nilai::onlyTrashed()->with('krs')->findOrFail($nilaiId);
+
+        if (! $nilai->krs || (int) $nilai->krs->id_mahasiswa !== $this->mahasiswaId) {
+            abort(404);
+        }
+
+        return $nilai;
     }
 
     public function render()

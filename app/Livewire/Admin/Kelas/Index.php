@@ -2,10 +2,24 @@
 
 namespace App\Livewire\Admin\Kelas;
 
+use App\Models\Jadwal;
+use App\Models\JadwalDosen;
+use App\Models\Kehadiran;
 use App\Models\Kelas;
+use App\Models\KelasDosen;
 use App\Models\KelompokKelas;
+use App\Models\MateriPerkuliahan;
+use App\Models\Perkuliahan;
 use App\Models\Prodi;
+use App\Models\Rps;
+use App\Models\RpsCpl;
+use App\Models\RpsCpmk;
+use App\Models\RpsPembelajaran;
+use App\Models\RpsSubcpmk;
 use App\Models\Semester;
+use App\Models\Tugas;
+use App\Models\TugasMahasiswa;
+use App\Models\Ujian;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,16 +31,22 @@ class Index extends Component
 {
     use WithPagination;
 
-    // Tabel-tabel yang constrained('kelas')->restrictOnDelete() di migration masing-masing —
-    // restrict itu berlaku di level baris DB apa adanya, termasuk baris yang di tabel itu sendiri
-    // sudah soft-deleted, jadi dicek lewat DB::table mentah di forceDeleteKelas(). Sama seperti
-    // pola FORCE_DELETE_BLOCKERS di App\Livewire\Admin\Matkul\Index dan Mahasiswa\Index.
+    // Kelas memakai App\Models\Concerns\AturanHapusBerantai dengan 4 relasi hapusBerantai: jadwal,
+    // kelasDosen, ujian, rps (lihat Kelas::$hapusBerantai) — begitu Kelas di-soft-delete, keempatnya
+    // OTOMATIS ikut ter-soft-delete bersamaan (timestamp sama persis). Trait itu sendiri sengaja
+    // TIDAK menyentuh forceDelete() ("forceDelete tidak disentuh: di situ foreign key database yang
+    // berlaku" — lihat docblock trait-nya), jadi kalau keempat tabel itu diblokir mentah-mentah di
+    // sini seperti tabel restrictOnDelete lain, kelas yang dihapus lewat jalur normal nyaris tidak
+    // pernah bisa dihapus permanen — persis gejala yang dilaporkan.
+    //
+    // Makanya keempatnya ditangani KHUSUS di forceDeleteKelas() (lihat blokirHapusBerantaiKelas()
+    // dan cascadeForceDeleteJadwalTerhapus()/cascadeForceDeleteRpsTerhapus()): baris yang MASIH AKTIF
+    // tetap memblokir sama seperti sebelumnya, tapi baris yang SUDAH soft-deleted ikut dihapus
+    // permanen bersama kelasnya, bukan sekadar diblokir. 'krs' TETAP di daftar ini tanpa perubahan —
+    // itu hapusDiblokirOleh (bukan hapusBerantai) di Kelas, riwayat akademik yang sengaja TIDAK
+    // PERNAH ikut dihapus otomatis meski sudah soft-deleted.
     private const FORCE_DELETE_BLOCKERS = [
         'krs' => ['column' => 'id_kelas', 'label' => 'KRS'],
-        'jadwal' => ['column' => 'id_kelas', 'label' => 'jadwal'],
-        'kelas_dosen' => ['column' => 'id_kelas', 'label' => 'dosen pengampu'],
-        'rps' => ['column' => 'id_kelas', 'label' => 'RPS'],
-        'ujian' => ['column' => 'id_kelas', 'label' => 'ujian'],
     ];
 
     // #[Url] supaya state ini bisa dibaca ulang lewat query string ketika user kembali dari
@@ -187,8 +207,130 @@ class Index extends Component
     }
 
     /**
+     * Jadwal yang SUDAH di-soft-delete masih punya data turunan yang MASIH AKTIF (belum
+     * di-soft-delete)? AturanHapusBerantai pada Jadwal sudah men-cascade dosen/materiPerkuliahan/
+     * tugas begitu jadwal itu sendiri di-soft-delete lewat jalur normal ($jadwal->delete()) — jadi
+     * pengecekan jadwal_dosen/materi_perkuliahan di sini murni jaga-jaga kalau jadwalnya sempat
+     * dihapus lewat jalur lain (query builder, yang melewati event model dan cascade-nya). Dua
+     * relasi lain — perkuliahan (dan kehadiran mahasiswa di bawahnya) serta tugas (dan pengumpulan
+     * tugas mahasiswa di bawahnya) — memang TIDAK PERNAH ikut ter-cascade oleh trait itu (keduanya
+     * dideklarasikan hapusDiblokirOleh, bukan hapusBerantai, di Jadwal/Tugas), jadi genuinely bisa
+     * saja masih hidup walau jadwal induknya sudah soft-deleted — itu sebabnya dicek eksplisit di sini.
+     */
+    private function jadwalTerhapusPunyaTurunanAktif(int $idJadwal): bool
+    {
+        if (JadwalDosen::where('id_jadwal', $idJadwal)->whereNull('deleted_at')->exists()) {
+            return true;
+        }
+        if (MateriPerkuliahan::where('id_jadwal', $idJadwal)->whereNull('deleted_at')->exists()) {
+            return true;
+        }
+        if (Perkuliahan::where('id_jadwal', $idJadwal)->whereNull('deleted_at')->exists()) {
+            return true;
+        }
+
+        $idPerkuliahanTerhapus = Perkuliahan::onlyTrashed()->where('id_jadwal', $idJadwal)->pluck('id');
+        if ($idPerkuliahanTerhapus->isNotEmpty()
+            && Kehadiran::whereIn('id_perkuliahan', $idPerkuliahanTerhapus)->whereNull('deleted_at')->exists()) {
+            return true;
+        }
+
+        if (Tugas::where('id_jadwal', $idJadwal)->whereNull('deleted_at')->exists()) {
+            return true;
+        }
+
+        $idTugasTerhapus = Tugas::onlyTrashed()->where('id_jadwal', $idJadwal)->pluck('id');
+        if ($idTugasTerhapus->isNotEmpty()
+            && TugasMahasiswa::whereIn('id_tugas', $idTugasTerhapus)->whereNull('deleted_at')->exists()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Hapus permanen satu jadwal (yang sudah dipastikan aman lewat jadwalTerhapusPunyaTurunanAktif())
+     * beserta seluruh turunannya yang juga sudah soft-deleted — kehadiran di bawah perkuliahan lalu
+     * perkuliahan itu sendiri, pengumpulan tugas mahasiswa lalu tugas itu sendiri, materi_perkuliahan,
+     * jadwal_dosen, baru jadwalnya. Urutan dari anak ke induk supaya tidak menabrak restrictOnDelete
+     * masing-masing tabel.
+     */
+    private function cascadeForceDeleteJadwalTerhapus(int $idJadwal): void
+    {
+        $idPerkuliahan = Perkuliahan::withTrashed()->where('id_jadwal', $idJadwal)->pluck('id');
+        if ($idPerkuliahan->isNotEmpty()) {
+            Kehadiran::withTrashed()->whereIn('id_perkuliahan', $idPerkuliahan)->forceDelete();
+        }
+        Perkuliahan::withTrashed()->where('id_jadwal', $idJadwal)->forceDelete();
+
+        $idTugas = Tugas::withTrashed()->where('id_jadwal', $idJadwal)->pluck('id');
+        if ($idTugas->isNotEmpty()) {
+            TugasMahasiswa::withTrashed()->whereIn('id_tugas', $idTugas)->forceDelete();
+        }
+        Tugas::withTrashed()->where('id_jadwal', $idJadwal)->forceDelete();
+
+        MateriPerkuliahan::withTrashed()->where('id_jadwal', $idJadwal)->forceDelete();
+        JadwalDosen::withTrashed()->where('id_jadwal', $idJadwal)->forceDelete();
+        Jadwal::withTrashed()->where('id', $idJadwal)->forceDelete();
+    }
+
+    /**
+     * Hapus permanen satu RPS beserta seluruh pohon hapusBerantai-nya yang juga sudah soft-deleted
+     * (rps_subcpmk di bawah rps_cpmk, rps_cpmk, rps_cpl, rps_pembelajaran) — tidak perlu pengecekan
+     * "turunan aktif" terpisah seperti jadwal, karena Rps::$hapusBerantai men-cascade seluruh pohon
+     * ini tanpa satu pun hapusDiblokirOleh di dalamnya (lihat App\Models\Rps dan RpsCpmk).
+     */
+    private function cascadeForceDeleteRpsTerhapus(int $idRps): void
+    {
+        $idCpmk = RpsCpmk::withTrashed()->where('id_rps', $idRps)->pluck('id');
+        if ($idCpmk->isNotEmpty()) {
+            RpsSubcpmk::withTrashed()->whereIn('id_cpmk', $idCpmk)->forceDelete();
+        }
+        RpsCpmk::withTrashed()->where('id_rps', $idRps)->forceDelete();
+        RpsCpl::withTrashed()->where('id_rps', $idRps)->forceDelete();
+        RpsPembelajaran::withTrashed()->where('id_rps', $idRps)->forceDelete();
+        Rps::withTrashed()->where('id', $idRps)->forceDelete();
+    }
+
+    /**
+     * Blocker untuk keempat relasi hapusBerantai Kelas (lihat catatan FORCE_DELETE_BLOCKERS) —
+     * baris yang masih aktif tetap memblokir sama seperti tabel lain; jadwal juga dicek lebih dalam
+     * untuk baris yang sudah soft-deleted tapi masih punya turunan aktif (lihat
+     * jadwalTerhapusPunyaTurunanAktif()). kelas_dosen dan ujian adalah leaf (tidak direferensikan
+     * tabel lain), jadi baris yang sudah soft-deleted di keduanya selalu aman dihapus permanen
+     * tanpa pengecekan tambahan.
+     *
+     * @return array<int, string>
+     */
+    private function blokirHapusBerantaiKelas(int $idKelas): array
+    {
+        $blockers = [];
+
+        if (KelasDosen::where('id_kelas', $idKelas)->whereNull('deleted_at')->exists()) {
+            $blockers[] = 'dosen pengampu';
+        }
+        if (Ujian::where('id_kelas', $idKelas)->whereNull('deleted_at')->exists()) {
+            $blockers[] = 'ujian';
+        }
+        if (Rps::where('id_kelas', $idKelas)->whereNull('deleted_at')->exists()) {
+            $blockers[] = 'RPS';
+        }
+        if (Jadwal::where('id_kelas', $idKelas)->whereNull('deleted_at')->exists()) {
+            $blockers[] = 'jadwal';
+        }
+
+        $idJadwalTerhapus = Jadwal::onlyTrashed()->where('id_kelas', $idKelas)->pluck('id');
+        if ($idJadwalTerhapus->contains(fn (int $id) => $this->jadwalTerhapusPunyaTurunanAktif($id))) {
+            $blockers[] = 'jadwal yang sudah dihapus (masih ada presensi/dosen pengampu/materi/tugas yang belum dihapus)';
+        }
+
+        return $blockers;
+    }
+
+    /**
      * Tidak ada padanan di KelasController — API belum punya endpoint hapus permanen, murni fitur
-     * panel. Lihat FORCE_DELETE_BLOCKERS untuk daftar tabel yang restrictOnDelete().
+     * panel. Lihat FORCE_DELETE_BLOCKERS untuk 'krs' (satu-satunya yang masih diblokir mentah-mentah
+     * apa adanya) dan blokirHapusBerantaiKelas() untuk jadwal/kelas_dosen/ujian/rps.
      */
     public function forceDeleteKelas(): void
     {
@@ -212,6 +354,7 @@ class Index extends Component
                 $blockers[] = $meta['label'];
             }
         }
+        array_push($blockers, ...$this->blokirHapusBerantaiKelas($kelas->id));
 
         if ($blockers !== []) {
             session()->flash('error', 'Tidak bisa menghapus permanen kelas ini: masih tercatat di data '.implode(', ', $blockers).'. Hapus atau pindahkan data itu terlebih dahulu.');
@@ -220,7 +363,21 @@ class Index extends Component
             return;
         }
 
-        $kelas->forceDelete();
+        $idJadwalTerhapus = Jadwal::onlyTrashed()->where('id_kelas', $kelas->id)->pluck('id');
+        $idRpsTerhapus = Rps::onlyTrashed()->where('id_kelas', $kelas->id)->pluck('id');
+
+        DB::transaction(function () use ($kelas, $idJadwalTerhapus, $idRpsTerhapus): void {
+            foreach ($idJadwalTerhapus as $idJadwal) {
+                $this->cascadeForceDeleteJadwalTerhapus($idJadwal);
+            }
+            foreach ($idRpsTerhapus as $idRps) {
+                $this->cascadeForceDeleteRpsTerhapus($idRps);
+            }
+            KelasDosen::withTrashed()->where('id_kelas', $kelas->id)->forceDelete();
+            Ujian::withTrashed()->where('id_kelas', $kelas->id)->forceDelete();
+
+            $kelas->forceDelete();
+        });
 
         $this->confirmingForceDeleteId = null;
         session()->flash('status', 'Kelas berhasil dihapus permanen.');
