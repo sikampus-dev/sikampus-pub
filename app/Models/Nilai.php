@@ -94,4 +94,30 @@ class Nilai extends Model
 
         return $nilai;
     }
+
+    /**
+     * Pulihkan nilai soft-deleted milik konversi ini sebagai pengganti Nilai::create(), kalau ada.
+     *
+     * `unique('id_konversi_nilai')` di tabel nilai ikut menghitung baris soft-deleted, jadi transfer
+     * konversi yang mencari nilai hidup lalu jatuh ke create() melanggar constraint begitu konversi
+     * itu pernah punya nilai yang dihapus. Panggil ini tepat di titik create, lalu isi nilainya.
+     *
+     * Kolom nilainya dikosongkan dulu — pemanggil sedang MEMBUAT nilai, dan isi baris yang sudah
+     * dihapus tidak boleh bocor ke sana. Nilai konversi tidak punya id_krs, jadi tidak ada komponen
+     * atau revisi yang ikut kembali lewat AturanHapusBerantai.
+     */
+    public static function pulihkanUntukKonversiBaru(int $idKonversiNilai): ?self
+    {
+        $nilai = static::onlyTrashed()->where('id_konversi_nilai', $idKonversiNilai)->first();
+        if (! $nilai) {
+            return null;
+        }
+
+        // Di-set sebelum restore() supaya ikut tersimpan dalam save() yang sama.
+        $nilai->fill(['sks' => null, 'angka_mutu' => null, 'huruf_mutu' => null, 'is_final' => false, 'revisi' => 0]);
+        $nilai->deleted_by = null;
+        $nilai->restore();
+
+        return $nilai;
+    }
 }

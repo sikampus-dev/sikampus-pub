@@ -2117,12 +2117,6 @@ class NilaiController extends Controller
             return response()->json(['message' => 'Nilai tidak ditemukan'], 404);
         }
 
-        if ($nilai->trashed()) {
-            $nilai->restore();
-            $nilai->deleted_by = null;
-            $nilai->save();
-        }
-
         $user = $request->user();
         if ($user && $user->hasScopeRestriction()) {
             $krs = $nilai->krs ?? Krs::with('mahasiswa')->find($nilai->id_krs);
@@ -2182,6 +2176,14 @@ class NilaiController extends Controller
 
         try {
             DB::transaction(function () use ($request, $nilai, $updateData): void {
+                // Restore baru setelah cek scope & validasi: kalau di awal, 403/422 meninggalkan
+                // nilai (beserta komponen & revisinya, lewat hapus berantai) sudah terpulihkan.
+                if ($nilai->trashed()) {
+                    $nilai->restore();
+                    $nilai->deleted_by = null;
+                    $nilai->save();
+                }
+
                 $nilai->update($updateData);
                 $nilai->refresh();
                 $this->upsertNilaiRevisiForAdmin($request, $nilai);
