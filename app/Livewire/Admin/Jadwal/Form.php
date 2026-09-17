@@ -12,6 +12,7 @@ use App\Models\Prodi;
 use App\Models\Ruangan;
 use App\Models\Semester;
 use App\Services\JadwalBatchGenerator;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -53,6 +54,12 @@ class Form extends Component
     public ?int $id_jenis_kuliah = null;
 
     public bool $is_active = false;
+
+    // Melewati pengecekan slot (id_kelas, id_ruangan, urutan_pertemuan) di aplikasi — lihat
+    // catatan di saveCreate()/saveUpdate(). Constraint unique di database (jadwal_unique_slot)
+    // tetap berlaku terlepas dari checkbox ini; itu jaring pengaman terakhir yang tidak bisa
+    // dilewati dari sini.
+    public bool $lewatiPengecekanBentrok = false;
 
     public string $dosenSearch = '';
 
@@ -292,29 +299,56 @@ class Form extends Component
         }
 
         $n = (int) $validated['jumlah_pertemuan'];
-        $slotError = JadwalBatchGenerator::cekSlotTersedia($validated['id_kelas'], $n, $this->id_ruangan);
-        if ($slotError !== null) {
-            $this->addError('jumlah_pertemuan', $slotError);
+
+        if (! $this->lewatiPengecekanBentrok) {
+            $slotError = JadwalBatchGenerator::cekSlotTersedia($validated['id_kelas'], $n, $this->id_ruangan);
+            if ($slotError !== null) {
+                $this->addError('jumlah_pertemuan', $slotError);
+
+                return null;
+            }
+        }
+
+        try {
+            DB::transaction(function () use ($n, $kelas, $validated): void {
+                JadwalBatchGenerator::generate($kelas, $validated['id_kelas'], $n, [
+                    'id_jenis_kuliah' => $this->id_jenis_kuliah,
+                    'tanggal' => $this->tanggal ?: null,
+                    'hari' => $this->hari,
+                    'jam_mulai' => $this->jam_mulai,
+                    'jam_selesai' => $this->jam_selesai,
+                    'id_ruangan' => $this->id_ruangan,
+                    'is_active' => $this->is_active,
+                    'tanggal_hari_otomatis' => $this->tanggal_hari_otomatis,
+                ], $this->dosenIds);
+            });
+        } catch (QueryException $e) {
+            if (! $this->isSlotUniqueViolation($e)) {
+                throw $e;
+            }
+
+            // Constraint unique (jadwal_unique_slot) di database tidak bisa dilewati dari sini —
+            // "Lewati pengecekan" hanya melewati pengecekan aplikasi (bermakna nyata untuk slot
+            // tanpa ruangan, lihat catatan di properti $lewatiPengecekanBentrok), bukan constraint
+            // ini. Kombinasi kelas+ruangan+urutan pertemuan yang benar-benar duplikat tetap ditolak.
+            $this->addError('jumlah_pertemuan', 'Sebagian slot pertemuan bentrok dengan kelas, ruangan, dan urutan pertemuan yang sama di database — tidak bisa dilewati.');
 
             return null;
         }
 
-        DB::transaction(function () use ($n, $kelas, $validated): void {
-            JadwalBatchGenerator::generate($kelas, $validated['id_kelas'], $n, [
-                'id_jenis_kuliah' => $this->id_jenis_kuliah,
-                'tanggal' => $this->tanggal ?: null,
-                'hari' => $this->hari,
-                'jam_mulai' => $this->jam_mulai,
-                'jam_selesai' => $this->jam_selesai,
-                'id_ruangan' => $this->id_ruangan,
-                'is_active' => $this->is_active,
-                'tanggal_hari_otomatis' => $this->tanggal_hari_otomatis,
-            ], $this->dosenIds);
-        });
-
         session()->flash('status', 'Jadwal berhasil disimpan.');
 
         return redirect($this->backUrl);
+    }
+
+    /**
+     * Deteksi pelanggaran constraint unique jadwal_unique_slot secara spesifik (bukan sekadar kode
+     * SQLSTATE 23000 generik, supaya pelanggaran FK/constraint lain tidak ikut tersamarkan jadi
+     * pesan "slot bentrok").
+     */
+    private function isSlotUniqueViolation(QueryException $e): bool
+    {
+        return str_contains($e->getMessage(), 'jadwal_unique_slot');
     }
 
     /**
@@ -333,18 +367,20 @@ class Form extends Component
             return null;
         }
 
-        $dupQ = Jadwal::where('id_kelas', $validated['id_kelas'])
-            ->where('urutan_pertemuan', (int) $validated['urutan_pertemuan'])
-            ->where('id', '!=', $jadwal->id);
-        if ($this->id_ruangan) {
-            $dupQ->where('id_ruangan', $this->id_ruangan);
-        } else {
-            $dupQ->whereNull('id_ruangan');
-        }
-        if ($dupQ->exists()) {
-            $this->addError('urutan_pertemuan', 'Sudah ada jadwal untuk kelas, ruangan, dan urutan pertemuan ini.');
+        if (! $this->lewatiPengecekanBentrok) {
+            $dupQ = Jadwal::where('id_kelas', $validated['id_kelas'])
+                ->where('urutan_pertemuan', (int) $validated['urutan_pertemuan'])
+                ->where('id', '!=', $jadwal->id);
+            if ($this->id_ruangan) {
+                $dupQ->where('id_ruangan', $this->id_ruangan);
+            } else {
+                $dupQ->whereNull('id_ruangan');
+            }
+            if ($dupQ->exists()) {
+                $this->addError('urutan_pertemuan', 'Sudah ada jadwal untuk kelas, ruangan, dan urutan pertemuan ini.');
 
-            return null;
+                return null;
+            }
         }
 
         $user = Auth::user();
@@ -356,44 +392,55 @@ class Form extends Component
             }
         }
 
-        DB::transaction(function () use ($validated, $jadwal): void {
-            $jadwal->update([
-                'id_kelas' => $validated['id_kelas'],
-                'urutan_pertemuan' => (int) $validated['urutan_pertemuan'],
-                'id_jenis_kuliah' => $this->id_jenis_kuliah,
-                'hari' => $this->hari,
-                'tanggal' => $this->tanggal ?: null,
-                'jam_mulai' => $this->jam_mulai ?: null,
-                'jam_selesai' => $this->jam_selesai ?: null,
-                'id_ruangan' => $this->id_ruangan,
-                'is_active' => $this->is_active,
-            ]);
+        try {
+            DB::transaction(function () use ($validated, $jadwal): void {
+                $jadwal->update([
+                    'id_kelas' => $validated['id_kelas'],
+                    'urutan_pertemuan' => (int) $validated['urutan_pertemuan'],
+                    'id_jenis_kuliah' => $this->id_jenis_kuliah,
+                    'hari' => $this->hari,
+                    'tanggal' => $this->tanggal ?: null,
+                    'jam_mulai' => $this->jam_mulai ?: null,
+                    'jam_selesai' => $this->jam_selesai ?: null,
+                    'id_ruangan' => $this->id_ruangan,
+                    'is_active' => $this->is_active,
+                ]);
 
-            JadwalDosen::withTrashed()
-                ->where('id_jadwal', $jadwal->id)
-                ->whereNotIn('id_dosen', $this->dosenIds)
-                ->forceDelete();
-
-            foreach ($this->dosenIds as $dosenId) {
-                $existing = JadwalDosen::withTrashed()
+                JadwalDosen::withTrashed()
                     ->where('id_jadwal', $jadwal->id)
-                    ->where('id_dosen', $dosenId)
-                    ->first();
+                    ->whereNotIn('id_dosen', $this->dosenIds)
+                    ->forceDelete();
 
-                if ($existing) {
-                    if ($existing->trashed()) {
-                        $existing->restore();
+                foreach ($this->dosenIds as $dosenId) {
+                    $existing = JadwalDosen::withTrashed()
+                        ->where('id_jadwal', $jadwal->id)
+                        ->where('id_dosen', $dosenId)
+                        ->first();
+
+                    if ($existing) {
+                        if ($existing->trashed()) {
+                            $existing->restore();
+                        }
+                        $existing->update(['status' => 'active']);
+                    } else {
+                        JadwalDosen::create([
+                            'id_jadwal' => $jadwal->id,
+                            'id_dosen' => $dosenId,
+                            'status' => 'active',
+                        ]);
                     }
-                    $existing->update(['status' => 'active']);
-                } else {
-                    JadwalDosen::create([
-                        'id_jadwal' => $jadwal->id,
-                        'id_dosen' => $dosenId,
-                        'status' => 'active',
-                    ]);
                 }
+            });
+        } catch (QueryException $e) {
+            if (! $this->isSlotUniqueViolation($e)) {
+                throw $e;
             }
-        });
+
+            // Sama seperti catatan di saveCreate() — constraint database tidak bisa dilewati.
+            $this->addError('urutan_pertemuan', 'Slot ini bentrok dengan kelas, ruangan, dan urutan pertemuan yang sama di database — tidak bisa dilewati.');
+
+            return null;
+        }
 
         session()->flash('status', 'Jadwal berhasil disimpan.');
 
