@@ -3,7 +3,9 @@
 use App\Models\Dosen;
 use App\Models\DosenWali;
 use App\Models\Fakultas;
+use App\Models\Krs;
 use App\Models\Mahasiswa;
+use App\Models\Nilai;
 use App\Models\Prodi;
 use App\Models\Role;
 use App\Models\User;
@@ -127,4 +129,41 @@ it('mengizinkan assignment scope prodi saja tanpa fakultas', function () {
         ->assertCreated();
 
     expect($target->fresh()->getAllowedProdiIds())->toBe([$prodi->id]);
+});
+
+it('admin dengan scope prodi tidak memulihkan nilai terhapus milik prodi lain lewat update', function () {
+    $prodiA = Prodi::factory()->create();
+    $prodiB = Prodi::factory()->create();
+    $mahasiswaB = Mahasiswa::factory()->create(['id_prodi' => $prodiB->id]);
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswaB->id]);
+    $nilai = Nilai::factory()->create(['id_krs' => $krs->id]);
+    $nilai->delete();
+
+    $admin = adminUser('admin_akademik');
+    scopeAdminToProdi($admin, $prodiA->id);
+
+    $this->actingAs($admin)
+        ->putJson("/api/nilai/{$nilai->id}", ['huruf_mutu' => 'B'])
+        ->assertForbidden();
+
+    expect(Nilai::withTrashed()->find($nilai->id)->trashed())->toBeTrue();
+});
+
+it('admin dengan scope prodi tetap bisa memulihkan nilai terhapus milik prodinya lewat update', function () {
+    $prodiA = Prodi::factory()->create();
+    $mahasiswaA = Mahasiswa::factory()->create(['id_prodi' => $prodiA->id]);
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswaA->id]);
+    $nilai = Nilai::factory()->create(['id_krs' => $krs->id]);
+    $nilai->delete();
+
+    $admin = adminUser('admin_akademik');
+    scopeAdminToProdi($admin, $prodiA->id);
+
+    $this->actingAs($admin)
+        ->putJson("/api/nilai/{$nilai->id}", ['huruf_mutu' => 'B'])
+        ->assertOk();
+
+    $nilai = Nilai::withTrashed()->find($nilai->id);
+    expect($nilai->trashed())->toBeFalse()
+        ->and($nilai->huruf_mutu)->toBe('B');
 });
