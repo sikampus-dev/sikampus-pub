@@ -155,6 +155,15 @@ class NilaiKelas extends Component
         $angkaMutu = $this->revisiAngkaMutu !== '' ? (float) $this->revisiAngkaMutu : null;
 
         DB::transaction(function () use ($krs, $sks, $angkaMutu) {
+            $nilai = Nilai::where('id_krs', $krs->id)->whereNull('deleted_at')->first();
+            $angkaMutuFinal = $angkaMutu ?? $nilai?->angka_mutu;
+
+            // Unique id_krs ikut menghitung baris soft-deleted, dan updateOrCreate hanya melihat baris
+            // hidup: pulihkan dulu, SEBELUM revisi dihitung, supaya revisi yang ikut pulih masuk hitungan.
+            if (! $nilai) {
+                Nilai::pulihkanUntukNilaiBaru($krs->id);
+            }
+
             NilaiRevisi::create([
                 'id_krs' => $krs->id,
                 'angka_mutu' => $angkaMutu,
@@ -164,8 +173,6 @@ class NilaiKelas extends Component
             ]);
 
             $revisiCount = NilaiRevisi::where('id_krs', $krs->id)->whereNull('deleted_at')->count();
-            $nilai = Nilai::where('id_krs', $krs->id)->whereNull('deleted_at')->first();
-            $angkaMutuFinal = $angkaMutu ?? $nilai?->angka_mutu;
 
             Nilai::updateOrCreate(
                 ['id_krs' => $krs->id],

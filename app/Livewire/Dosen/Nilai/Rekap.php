@@ -271,6 +271,9 @@ class Rekap extends Component
                     continue;
                 }
 
+                // updateOrCreate hanya melihat baris hidup, sedangkan unique id_krs ikut menghitung
+                // baris soft-deleted — pulihkan dulu (no-op kalau tidak ada).
+                Nilai::pulihkanUntukNilaiBaru($krs->id);
                 Nilai::updateOrCreate(
                     ['id_krs' => $krs->id],
                     ['sks' => $sks, 'angka_mutu' => $rentangNilai['nilai_angka'], 'huruf_mutu' => $rentangNilai['nilai_huruf'], 'is_final' => null]
@@ -386,6 +389,15 @@ class Rekap extends Component
 
         if ($this->editRevisiChecked) {
             DB::transaction(function () use ($krs, $sks, $angkaMutu) {
+                $nilai = Nilai::where('id_krs', $krs->id)->whereNull('deleted_at')->first();
+                $angkaMutuFinal = $angkaMutu ?? $nilai?->angka_mutu;
+
+                // Unique id_krs ikut menghitung baris soft-deleted, dan updateOrCreate hanya melihat baris
+                // hidup: pulihkan dulu, SEBELUM revisi dihitung, supaya revisi yang ikut pulih masuk hitungan.
+                if (! $nilai) {
+                    Nilai::pulihkanUntukNilaiBaru($krs->id);
+                }
+
                 NilaiRevisi::create([
                     'id_krs' => $krs->id,
                     'angka_mutu' => $angkaMutu,
@@ -395,8 +407,6 @@ class Rekap extends Component
                 ]);
 
                 $revisiCount = NilaiRevisi::where('id_krs', $krs->id)->whereNull('deleted_at')->count();
-                $nilai = Nilai::where('id_krs', $krs->id)->whereNull('deleted_at')->first();
-                $angkaMutuFinal = $angkaMutu ?? $nilai?->angka_mutu;
 
                 Nilai::updateOrCreate(
                     ['id_krs' => $krs->id],
@@ -412,13 +422,16 @@ class Rekap extends Component
             if ($nilai) {
                 $nilai->update(['huruf_mutu' => $this->editHurufMutu, 'angka_mutu' => $angkaMutuFinal]);
             } else {
-                Nilai::create([
+                $nilaiBaru = [
                     'id_krs' => $krs->id,
                     'sks' => $sks ?: null,
                     'huruf_mutu' => $this->editHurufMutu,
                     'angka_mutu' => $angkaMutuFinal,
                     'is_final' => false,
-                ]);
+                ];
+                // Sama persis dengan NilaiController::updateNilaiByKrs: pulihkan, jangan create.
+                $nilaiTerhapus = Nilai::pulihkanUntukNilaiBaru($krs->id);
+                $nilaiTerhapus ? $nilaiTerhapus->update($nilaiBaru) : Nilai::create($nilaiBaru);
             }
 
             session()->flash('status', 'Nilai berhasil diperbarui.');

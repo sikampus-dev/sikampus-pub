@@ -717,8 +717,8 @@ class NilaiController extends Controller
                     continue;
                 }
 
-                // Simpan atau update nilai
-                $nilai = Nilai::where('id_krs', $krs->id)->first();
+                // Simpan atau update nilai (nilai soft-deleted dipulihkan: unique id_krs ikut menghitungnya)
+                $nilai = Nilai::where('id_krs', $krs->id)->first() ?? Nilai::pulihkanUntukNilaiBaru($krs->id);
                 
                 if ($nilai) {
                     $nilai->update([
@@ -876,7 +876,8 @@ class NilaiController extends Controller
                     continue;
                 }
 
-                $nilai = Nilai::where('id_krs', $krs->id)->first();
+                // Nilai soft-deleted dipulihkan: unique id_krs ikut menghitungnya.
+                $nilai = Nilai::where('id_krs', $krs->id)->first() ?? Nilai::pulihkanUntukNilaiBaru($krs->id);
                 if ($nilai) {
                     $nilai->update([
                         'sks' => $sks,
@@ -1023,6 +1024,13 @@ class NilaiController extends Controller
         try {
             DB::beginTransaction();
 
+            $nilai = Nilai::where('id_krs', $validated['id_krs'])->whereNull('deleted_at')->first();
+            $angkaMutu = $validated['angka_mutu'] ?? $nilai?->angka_mutu;
+
+            // Unique id_krs ikut menghitung baris soft-deleted: pulihkan, jangan create. Dipulihkan
+            // SEBELUM revisi dihitung, supaya revisi yang ikut pulih bersamanya masuk hitungan.
+            $nilaiTerhapus = $nilai ? null : Nilai::pulihkanUntukNilaiBaru($validated['id_krs']);
+
             NilaiRevisi::create([
                 'id_krs' => $validated['id_krs'],
                 'angka_mutu' => $validated['angka_mutu'] ?? null,
@@ -1033,18 +1041,16 @@ class NilaiController extends Controller
 
             $revisiCount = NilaiRevisi::where('id_krs', $validated['id_krs'])->whereNull('deleted_at')->count();
 
-            $nilai = Nilai::where('id_krs', $validated['id_krs'])->whereNull('deleted_at')->first();
-            $angkaMutu = $validated['angka_mutu'] ?? $nilai?->angka_mutu;
-
             if (!$nilai) {
-                Nilai::create([
+                $nilaiBaru = [
                     'id_krs' => $validated['id_krs'],
                     'sks' => $sks ?: null,
                     'angka_mutu' => $angkaMutu,
                     'huruf_mutu' => $validated['huruf_mutu'],
                     'is_final' => null,
                     'revisi' => $revisiCount,
-                ]);
+                ];
+                $nilaiTerhapus ? $nilaiTerhapus->update($nilaiBaru) : Nilai::create($nilaiBaru);
             } else {
                 $nilai->update([
                     'angka_mutu' => $angkaMutu,
@@ -1113,13 +1119,16 @@ class NilaiController extends Controller
         $angkaMutu = $validated['angka_mutu'] ?? $nilai?->angka_mutu;
 
         if (!$nilai) {
-            Nilai::create([
+            $nilaiBaru = [
                 'id_krs' => $validated['id_krs'],
                 'sks' => $sks ?: null,
                 'huruf_mutu' => $validated['huruf_mutu'],
                 'angka_mutu' => $angkaMutu,
                 'is_final' => false,
-            ]);
+            ];
+            // Unique id_krs ikut menghitung baris soft-deleted: pulihkan, jangan create.
+            $nilaiTerhapus = Nilai::pulihkanUntukNilaiBaru($validated['id_krs']);
+            $nilaiTerhapus ? $nilaiTerhapus->update($nilaiBaru) : Nilai::create($nilaiBaru);
         } else {
             $nilai->update([
                 'huruf_mutu' => $validated['huruf_mutu'],
@@ -2517,6 +2526,19 @@ class NilaiController extends Controller
                         'nim' => $nim,
                         'kode_matkul' => $kodeMatkul,
                         'action' => 'updated',
+                    ];
+                } elseif ($restoredNilai = Nilai::pulihkanUntukNilaiBaru($krs->id)) {
+                    // Nilai yang pernah dihapus dihitung "created", bukan "updated": bagi admin KRS ini
+                    // belum punya nilai. Tanpa pemulihan, create() melanggar unique id_krs dan SELURUH
+                    // import di-rollback. Sama persis dengan Livewire Admin\Nilai\Import.
+                    $restoredNilai->update($nilaiData);
+                    $successCount++;
+                    $processedRows[] = [
+                        'row' => $rowNumber,
+                        'id' => $restoredNilai->id,
+                        'nim' => $nim,
+                        'kode_matkul' => $kodeMatkul,
+                        'action' => 'created',
                     ];
                 } else {
                     // Create new nilai

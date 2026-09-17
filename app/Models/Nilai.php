@@ -66,4 +66,32 @@ class Nilai extends Model
     {
         return $this->hasMany(NilaiRevisi::class, 'id_krs', 'id_krs');
     }
+
+    /**
+     * Pulihkan nilai soft-deleted milik KRS ini sebagai pengganti Nilai::create(), kalau ada.
+     *
+     * `unique('id_krs')` di tabel nilai ikut menghitung baris soft-deleted, jadi jalur yang mencari
+     * nilai hidup lalu jatuh ke create() (atau updateOrCreate, yang juga hanya melihat baris hidup)
+     * melanggar constraint begitu KRS itu pernah punya nilai yang dihapus. Panggil ini tepat di
+     * titik create: setelahnya baris itu hidup lagi dan akan ditemukan sebagai nilai yang ada.
+     *
+     * Kolom nilainya dikosongkan ke default create() — pemanggil sedang MEMBUAT nilai, dan isi baris
+     * yang sudah dihapus tidak boleh bocor ke sana (is_final=true lama yang ikut hidup akan mengunci
+     * nilai yang semestinya belum final). Yang ikut kembali hanya komponen & revisi yang terhapus
+     * bersamanya (AturanHapusBerantai), beserta kolom `revisi` yang menghitung baris-baris itu.
+     */
+    public static function pulihkanUntukNilaiBaru(int $idKrs): ?self
+    {
+        $nilai = static::onlyTrashed()->where('id_krs', $idKrs)->first();
+        if (! $nilai) {
+            return null;
+        }
+
+        // Di-set sebelum restore() supaya ikut tersimpan dalam save() yang sama.
+        $nilai->fill(['sks' => null, 'angka_mutu' => null, 'huruf_mutu' => null, 'is_final' => false]);
+        $nilai->deleted_by = null;
+        $nilai->restore();
+
+        return $nilai;
+    }
 }

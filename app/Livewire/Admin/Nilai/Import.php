@@ -37,7 +37,9 @@ class Import extends Component
     /**
      * Sama persis dengan NilaiController::import. Baris dengan KRS yang sudah punya nilai
      * akan MEMPERBARUI nilai itu (bukan dilewati) — dihitung sebagai "Diperbarui", bukan
-     * "Dilewati", meniru arti updated_count/success_count pada respons controller-nya.
+     * "Dilewati", meniru arti updated_count/success_count pada respons controller-nya. KRS yang
+     * nilainya pernah dihapus (soft delete) dihitung "Berhasil" (success_count): nilai lamanya
+     * dipulihkan lalu diisi ulang, bukan dibuat baris baru — lihat Nilai::pulihkanUntukNilaiBaru.
      */
     public function import(): void
     {
@@ -214,6 +216,12 @@ class Import extends Component
                 if ($existingNilai) {
                     $existingNilai->update($nilaiData);
                     $updatedCount++;
+                } elseif ($restoredNilai = Nilai::pulihkanUntukNilaiBaru($krs->id)) {
+                    // Nilai yang pernah dihapus dihitung "baru", bukan "diperbarui": bagi admin KRS ini
+                    // belum punya nilai. Tanpa pemulihan, create() melanggar unique id_krs dan SELURUH
+                    // import di-rollback. Sama persis dengan NilaiController::import.
+                    $restoredNilai->update($nilaiData);
+                    $successCount++;
                 } else {
                     Nilai::create($nilaiData);
                     $successCount++;

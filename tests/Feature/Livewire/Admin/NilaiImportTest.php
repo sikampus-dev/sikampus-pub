@@ -1,12 +1,15 @@
 <?php
 
 use App\Livewire\Admin\Nilai\Import;
+use App\Models\JenisPenilaian;
 use App\Models\Kelas;
 use App\Models\Krs;
 use App\Models\KurikulumMatkul;
 use App\Models\Mahasiswa;
 use App\Models\Matkul;
 use App\Models\Nilai;
+use App\Models\NilaiKomponen;
+use App\Models\NilaiRevisi;
 use App\Models\Prodi;
 use App\Models\Semester;
 use Illuminate\Http\UploadedFile;
@@ -120,6 +123,90 @@ it('updates an existing nilai row instead of creating a duplicate', function () 
     expect(Nilai::where('id_krs', $krs->id)->count())->toBe(1);
     expect($existing->fresh()->huruf_mutu)->toBe('A');
     expect((float) $existing->fresh()->angka_mutu)->toBe(90.0);
+});
+
+/**
+ * KRS yang nilainya pernah di-soft-delete: unique('id_krs') ikut menghitung baris terhapus, jadi
+ * Nilai::create() dulu melanggar constraint dan SELURUH import di-rollback dengan pesan generik.
+ * Nilai lama dipulihkan (beserta komponen & revisi yang terhapus bersamanya), isinya diganti isi
+ * file — tidak ada yang bocor dari baris terhapus — dan dihitung sebagai "Berhasil".
+ */
+function makeNilaiTerhapus(Krs $krs): array
+{
+    $nilai = Nilai::factory()->create([
+        'id_krs' => $krs->id, 'angka_mutu' => 3, 'huruf_mutu' => 'B', 'is_final' => true, 'deleted_by' => 'admin lama',
+    ]);
+    $komponen = NilaiKomponen::create([
+        'id_krs' => $krs->id, 'id_jenis_penilaian' => JenisPenilaian::factory()->create()->id, 'nilai' => 80,
+    ]);
+    $revisi = NilaiRevisi::create(['id_krs' => $krs->id, 'angka_mutu' => 3, 'huruf_mutu' => 'B']);
+    $nilai->delete();
+
+    return compact('nilai', 'komponen', 'revisi');
+}
+
+function expectNilaiDipulihkanDariImport(Krs $krs, array $terhapus): void
+{
+    expect(Nilai::withTrashed()->where('id_krs', $krs->id)->count())->toBe(1);
+
+    $nilai = Nilai::where('id_krs', $krs->id)->firstOrFail();
+    expect($nilai->id)->toBe($terhapus['nilai']->id)
+        ->and($nilai->deleted_by)->toBeNull()
+        ->and($nilai->huruf_mutu)->toBe('A')
+        ->and($nilai->angka_mutu)->toBeNull()
+        ->and($nilai->is_final)->toBeFalse()
+        ->and($nilai->sks)->toBe(3)
+        ->and($terhapus['komponen']->fresh()->trashed())->toBeFalse()
+        ->and($terhapus['revisi']->fresh()->trashed())->toBeFalse();
+}
+
+it('restores a soft-deleted nilai instead of rolling back the whole import', function () {
+    $admin = adminUser();
+    $prodi = Prodi::factory()->create();
+    $krsTerhapus = makeNilaiImportKrs($prodi, 'MK005', '20245', '2024000005');
+    $krsBaru = makeNilaiImportKrs($prodi, 'MK006', '20246', '2024000006');
+    $terhapus = makeNilaiTerhapus($krsTerhapus);
+
+    // Angka mutu sengaja kosong: nilai terhapus punya 3.00 dan is_final=true, dan tak satu pun boleh ikut hidup.
+    $file = makeNilaiImportFile([
+        ['2024000005', 'MK005', '20245', '', 'A', 'false'],
+        ['2024000006', 'MK006', '20246', '80', 'A', 'false'],
+    ]);
+
+    $result = Livewire::actingAs($admin)
+        ->test(Import::class)
+        ->set('file', $file)
+        ->call('import')
+        ->assertHasNoErrors()
+        ->assertSet('result.success_count', 2)
+        ->assertSet('result.updated_count', 0)
+        ->get('result');
+
+    expect($result['errors'])->toBe([]);
+    expectNilaiDipulihkanDariImport($krsTerhapus, $terhapus);
+    expect(Nilai::where('id_krs', $krsBaru->id)->exists())->toBeTrue();
+});
+
+it('restores a soft-deleted nilai through the API import the same way as the panel', function () {
+    $admin = adminUser();
+    $prodi = Prodi::factory()->create();
+    $krs = makeNilaiImportKrs($prodi, 'MK007', '20247', '2024000007');
+    $terhapus = makeNilaiTerhapus($krs);
+
+    $file = makeNilaiImportFile([
+        ['2024000007', 'MK007', '20247', '', 'A', 'false'],
+    ]);
+
+    $this->actingAs($admin)
+        ->post('/api/nilai/import', ['file' => $file], ['Accept' => 'application/json'])
+        ->assertOk()
+        ->assertJsonPath('success_count', 1)
+        ->assertJsonPath('updated_count', 0)
+        ->assertJsonPath('error_count', 0)
+        ->assertJsonPath('processed_rows.0.action', 'created')
+        ->assertJsonPath('processed_rows.0.id', $terhapus['nilai']->id);
+
+    expectNilaiDipulihkanDariImport($krs, $terhapus);
 });
 
 it('records an error when the mahasiswa nim cannot be found and shows a copy-log button', function () {
