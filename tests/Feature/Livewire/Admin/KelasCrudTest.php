@@ -135,6 +135,58 @@ it('does not delete a jadwal belonging to a different kelas even if its id is sm
     expect(Jadwal::find($jadwalB->id))->not->toBeNull();
 });
 
+// Sebelum diperbaiki, bulkDeleteJadwal() memakai Jadwal::where()->delete() (query builder) yang
+// melewati event model, jadi AturanHapusBerantai::delete() (tempat pemeriksaan blokir ini hidup)
+// tidak pernah jalan — jadwal dengan pertemuan perkuliahan aktif ikut terhapus diam-diam.
+it('refuses to bulk delete a jadwal that still has a live perkuliahan, dispatching the warning instead of deleting anything', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwalBlocked = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    Perkuliahan::factory()->create(['id_jadwal' => $jadwalBlocked->id]);
+    $jadwalFree = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $kelas->id])
+        ->set('selectedJadwalIds', [$jadwalBlocked->id, $jadwalFree->id])
+        ->call('confirmBulkDelete')
+        ->call('bulkDeleteJadwal')
+        ->assertDispatched('hapus-diblokir')
+        ->assertSet('confirmingBulkDelete', false);
+
+    // Diperiksa semua dulu sebelum ada yang dihapus — pilihan campuran (ada yang diblokir, ada
+    // yang bersih) tidak boleh terhapus sebagian.
+    expect(Jadwal::find($jadwalBlocked->id))->not->toBeNull();
+    expect(Jadwal::find($jadwalFree->id))->not->toBeNull();
+});
+
+// Sebelum diperbaiki, query-builder delete juga melewati hapusAnakBerantai() (dipicu event
+// `deleted` model) — dosen/materi/tugas milik jadwal yang terhapus jadi yatim: masih aktif walau
+// induknya (jadwal) sudah soft-deleted.
+it('cascades a bulk-deleted jadwal to its dosen, materi perkuliahan, and tugas via AturanHapusBerantai', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+
+    $dosen = Dosen::factory()->create();
+    $jadwalDosen = JadwalDosen::create(['id_jadwal' => $jadwal->id, 'id_dosen' => $dosen->id, 'status' => 'active']);
+    $materi = MateriPerkuliahan::create(['id_jadwal' => $jadwal->id, 'nama' => 'Slide', 'file' => 'materi/slide.pdf']);
+    $tugas = Tugas::create(['id_jadwal' => $jadwal->id, 'id_dosen' => $dosen->id, 'nama' => 'Tugas 1']);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $kelas->id])
+        ->set('selectedJadwalIds', [$jadwal->id])
+        ->call('bulkDeleteJadwal');
+
+    expect(Jadwal::find($jadwal->id))->toBeNull();
+    expect(JadwalDosen::find($jadwalDosen->id))->toBeNull();
+    expect(MateriPerkuliahan::find($materi->id))->toBeNull();
+    expect(Tugas::find($tugas->id))->toBeNull();
+
+    expect(JadwalDosen::withTrashed()->find($jadwalDosen->id)->trashed())->toBeTrue();
+    expect(MateriPerkuliahan::withTrashed()->find($materi->id)->trashed())->toBeTrue();
+    expect(Tugas::withTrashed()->find($tugas->id)->trashed())->toBeTrue();
+});
+
 it('does not open the bulk delete confirmation when nothing is checked', function () {
     $admin = adminUser();
     $kelas = Kelas::factory()->create();
