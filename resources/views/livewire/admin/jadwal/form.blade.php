@@ -141,6 +141,18 @@
                     />
                     @error('id_ruangan') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
+
+                <div class="sm:col-span-2 flex items-start gap-2 pt-2">
+                    <input type="checkbox" wire:model="lewatiPengecekanBentrok" id="lewatiPengecekanBentrok" class="mt-0.5 size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10" />
+                    <label for="lewatiPengecekanBentrok" class="text-sm">
+                        <span class="font-medium text-neutral-700">Lewati pengecekan slot bentrok</span>
+                        <p class="text-xs text-neutral-500">
+                            Kelas, ruangan, dan urutan pertemuan yang sama biasanya ditolak. Aktifkan ini untuk melewati pengecekan
+                            tersebut — berguna terutama saat ruangan dikosongkan. Constraint unik di database tetap berlaku dan akan
+                            menolak kombinasi kelas + ruangan + urutan pertemuan yang benar-benar sudah ada, terlepas dari opsi ini.
+                        </p>
+                    </label>
+                </div>
             </div>
         </div>
 

@@ -149,6 +149,44 @@ it('rejects create when a slot for the kelas and ruangan is already taken', func
     expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(1);
 });
 
+it('lewatiPengecekanBentrok lets create skip the slot pre-check when id_ruangan is empty', function () {
+    // Tanpa ruangan, constraint unique di database membolehkan baris kembar (MySQL memperlakukan
+    // NULL sebagai berbeda dari NULL lain pada unique index) — jadi bypass ini benar-benar berhasil
+    // menyimpan, bukan cuma melewati pengecekan lalu tetap gagal di database.
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    Jadwal::factory()->create(['id_kelas' => $kelas->id, 'id_ruangan' => null, 'urutan_pertemuan' => 1]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('id_kelas', $kelas->id)
+        ->set('jumlah_pertemuan', '2')
+        ->set('lewatiPengecekanBentrok', true)
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('admin.akademik.jadwal'));
+
+    expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(3);
+});
+
+it('lewatiPengecekanBentrok does not let create bypass the database unique constraint when id_ruangan is set', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $ruangan = Ruangan::factory()->create();
+    Jadwal::factory()->create(['id_kelas' => $kelas->id, 'id_ruangan' => $ruangan->id, 'urutan_pertemuan' => 1]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('id_kelas', $kelas->id)
+        ->set('jumlah_pertemuan', '1')
+        ->set('id_ruangan', $ruangan->id)
+        ->set('lewatiPengecekanBentrok', true)
+        ->call('save')
+        ->assertHasErrors(['jumlah_pertemuan']);
+
+    expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(1);
+});
+
 it('updates a single jadwal row and syncs its dosen list', function () {
     $admin = adminUser();
     $kelas = Kelas::factory()->create();
@@ -183,6 +221,40 @@ it('rejects update when the new slot collides with another jadwal row', function
         ->set('urutan_pertemuan', '1')
         ->call('save')
         ->assertHasErrors(['urutan_pertemuan']);
+});
+
+it('lewatiPengecekanBentrok lets update skip the slot pre-check when id_ruangan is empty', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    Jadwal::factory()->create(['id_kelas' => $kelas->id, 'id_ruangan' => null, 'urutan_pertemuan' => 1]);
+    $jadwal2 = Jadwal::factory()->create(['id_kelas' => $kelas->id, 'id_ruangan' => null, 'urutan_pertemuan' => 2]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $jadwal2->id])
+        ->set('urutan_pertemuan', '1')
+        ->set('lewatiPengecekanBentrok', true)
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('admin.akademik.jadwal'));
+
+    expect($jadwal2->fresh()->urutan_pertemuan)->toBe(1);
+});
+
+it('lewatiPengecekanBentrok does not let update bypass the database unique constraint when id_ruangan is set', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+    $ruangan = Ruangan::factory()->create();
+    Jadwal::factory()->create(['id_kelas' => $kelas->id, 'id_ruangan' => $ruangan->id, 'urutan_pertemuan' => 1]);
+    $jadwal2 = Jadwal::factory()->create(['id_kelas' => $kelas->id, 'id_ruangan' => $ruangan->id, 'urutan_pertemuan' => 2]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $jadwal2->id])
+        ->set('urutan_pertemuan', '1')
+        ->set('lewatiPengecekanBentrok', true)
+        ->call('save')
+        ->assertHasErrors(['urutan_pertemuan']);
+
+    expect($jadwal2->fresh()->urutan_pertemuan)->toBe(2);
 });
 
 it('deletes a jadwal from the index page', function () {
