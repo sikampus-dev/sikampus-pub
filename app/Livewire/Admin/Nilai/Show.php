@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Nilai;
 
+use App\Livewire\Admin\Nilai\Concerns\ForwardsIndexState;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
 use App\Models\Nilai;
@@ -16,6 +17,8 @@ use Livewire\Component;
 
 class Show extends Component
 {
+    use ForwardsIndexState;
+
     public int $mahasiswaId;
 
     public string $search = '';
@@ -27,6 +30,7 @@ class Show extends Component
     public function mount(int $id): void
     {
         $this->mahasiswaId = $id;
+        $this->resolveBackUrl();
 
         $mahasiswa = Mahasiswa::findOrFail($id);
 

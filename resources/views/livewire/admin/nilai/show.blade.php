@@ -10,14 +10,14 @@
 @section('breadcrumb')
     @include('admin.partials.breadcrumb', ['items' => [
         ['label' => 'Akademik'],
-        ['label' => 'Nilai', 'route' => route('admin.akademik.nilai')],
+        ['label' => 'Nilai', 'route' => $backUrl],
         ['label' => $this->mahasiswa->nama],
     ]])
 @endsection
 
 @section('page_actions')
     <a
-        href="{{ route('admin.akademik.nilai') }}"
+        href="{{ $backUrl }}"
         class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border"
     >
         <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
@@ -190,7 +190,7 @@
                                 <div class="inline-flex items-center gap-1">
                                     @if (\App\Support\PanelAccess::can(auth()->user(), 'nilai', 'update'))
                                         <a
-                                            href="{{ route('admin.akademik.nilai.edit', [$mahasiswaId, $krs->id]) }}"
+                                            href="{{ route('admin.akademik.nilai.edit', [$mahasiswaId, $krs->id]) }}{{ $returnQuery ? '?'.$returnQuery : '' }}"
                                             class="inline-flex items-center justify-center rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                                             title="{{ $nilai ? 'Ubah Nilai' : 'Input Nilai' }}"
                                         >

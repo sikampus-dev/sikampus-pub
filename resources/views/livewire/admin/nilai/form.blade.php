@@ -9,8 +9,8 @@
 @section('breadcrumb')
     @include('admin.partials.breadcrumb', ['items' => [
         ['label' => 'Akademik'],
-        ['label' => 'Nilai', 'route' => route('admin.akademik.nilai')],
-        ['label' => $mahasiswaNama, 'route' => route('admin.akademik.nilai.show', $mahasiswaId)],
+        ['label' => 'Nilai', 'route' => $backUrl],
+        ['label' => $mahasiswaNama, 'route' => $detailUrl],
         ['label' => $nilaiId ? 'Ubah' : 'Input'],
     ]])
 @endsection
@@ -109,7 +109,7 @@
         </div>
 
         <div class="flex items-center justify-end gap-3">
-            <a href="{{ route('admin.akademik.nilai.show', $mahasiswaId) }}" class="rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
+            <a href="{{ $detailUrl }}" class="rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
                 Batal
             </a>
             <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800">

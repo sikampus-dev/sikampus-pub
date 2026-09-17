@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Nilai;
 
+use App\Livewire\Admin\Nilai\Concerns\ForwardsIndexState;
 use App\Models\Krs;
 use App\Models\Nilai;
 use App\Models\NilaiRevisi;
@@ -13,6 +14,11 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    use ForwardsIndexState;
+
+    /** Tujuan Batal/breadcrumb/redirect: detail nilai mahasiswa, membawa state Index. */
+    public string $detailUrl = '';
+
     public int $mahasiswaId;
 
     public int $idKrs;
@@ -47,6 +53,8 @@ class Form extends Component
     {
         $this->mahasiswaId = $id;
         $this->idKrs = $idKrs;
+        $this->resolveBackUrl();
+        $this->detailUrl = $this->urlDenganState(route('admin.akademik.nilai.show', $id));
 
         $krs = Krs::with([
             'mahasiswa.prodi',
@@ -200,7 +208,7 @@ class Form extends Component
 
         session()->flash('status', $this->nilaiId ? 'Data nilai diperbarui.' : 'Data nilai dibuat.');
 
-        return redirect()->route('admin.akademik.nilai.show', $this->mahasiswaId);
+        return redirect($this->detailUrl);
     }
 
     /**

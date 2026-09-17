@@ -6,6 +6,7 @@ use App\Livewire\Admin\Krs\Concerns\ForwardsIndexState;
 use App\Models\Kelas;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
+use App\Services\PendaftaranKrs;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -314,6 +315,17 @@ class Form extends Component
                     continue;
                 }
 
+                // Mata kuliah yang sama di kelas paralel lain pada semester yang sama. KRS yang dibuat
+                // baris sebelumnya di batch ini sudah tersimpan di transaksi yang sama, jadi dua baris
+                // form yang memilih kelas paralel dari mata kuliah yang sama ikut tertangkap.
+                $kelasBaris = Kelas::find($row['id_kelas']);
+                $sudahTerdaftar = $kelasBaris ? PendaftaranKrs::krsMataKuliahSamaDenganKelas((int) $idMahasiswa, $kelasBaris) : null;
+                if ($sudahTerdaftar) {
+                    $errors[] = PendaftaranKrs::pesanSudahTerdaftar($sudahTerdaftar);
+
+                    continue;
+                }
+
                 $status = $row['status'] ?: 'pending';
                 $isApproved = $status === 'acc';
 
@@ -378,6 +390,14 @@ class Form extends Component
 
             if ($exists) {
                 $this->submitError = 'KRS dengan kelas ini sudah ada untuk mahasiswa ini.';
+
+                return null;
+            }
+
+            $kelasBaru = Kelas::find($idKelas);
+            $sudahTerdaftar = $kelasBaru ? PendaftaranKrs::krsMataKuliahSamaDenganKelas((int) $krs->id_mahasiswa, $kelasBaru, (int) $krs->id) : null;
+            if ($sudahTerdaftar) {
+                $this->submitError = PendaftaranKrs::pesanSudahTerdaftar($sudahTerdaftar);
 
                 return null;
             }

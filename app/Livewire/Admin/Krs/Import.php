@@ -8,6 +8,7 @@ use App\Models\KurikulumMatkul;
 use App\Models\Mahasiswa;
 use App\Models\Matkul;
 use App\Models\Semester;
+use App\Services\PendaftaranKrs;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -147,44 +148,39 @@ class Import extends Component
                     continue;
                 }
 
-                // Kelas WAJIB milik prodi mahasiswa. Fallback lintas-prodi sudah dihapus: kalau
-                // prodi mahasiswa tidak punya kelasnya, mendaftarkan dia ke kelas prodi lain
-                // menghasilkan data yang salah tanpa peringatan apa pun.
-                $kelas = Kelas::whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
-                    ->where('id_semester', $semester->id)
-                    ->where('id_prodi', $mahasiswa->id_prodi)
-                    ->first();
-
-                if (! $kelas) {
-                    // Kalau kelasnya ternyata ada di prodi lain, sebutkan — supaya admin tahu ini
-                    // soal ketidakcocokan prodi, bukan kelas yang belum dibuat.
-                    $prodiKelasLain = Kelas::with('prodi')
-                        ->whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
-                        ->where('id_semester', $semester->id)
-                        ->first()?->prodi?->nama;
-
-                    $errors[] = "Baris {$rowNumber}: Kelas dengan semester '{$semester->kode}' dan mata kuliah '{$kodeMatkul}' tidak ditemukan pada prodi mahasiswa."
-                        .($prodiKelasLain ? " Kelas mata kuliah ini adanya di prodi '{$prodiKelasLain}', dan mahasiswa tidak bisa didaftarkan ke kelas prodi lain." : '');
-
-                    continue;
-                }
-
-                // Cukup cek prodi mahasiswa: kelas di atas sudah dipastikan berprodi sama.
                 if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                     $errors[] = "Baris {$rowNumber}: Anda tidak memiliki akses ke mahasiswa NIM '{$nim}' (prodi di luar scope).";
 
                     continue;
                 }
 
-                $exists = Krs::where('id_mahasiswa', $mahasiswa->id)
-                    ->where('id_kelas', $kelas->id)
-                    ->whereNull('deleted_at')
-                    ->exists();
+                // Kelas ditentukan dari kelompok kelas & angkatan mahasiswa, bukan ->first() — yang
+                // dulu memilih kelas paralel sembarang dan melahirkan ribuan KRS kembar. Lihat
+                // App\Services\PendaftaranKrs.
+                [$kelas, $gagalKelas] = PendaftaranKrs::tentukanKelas($mahasiswa, $kurikulumMatkulList->pluck('id'), $semester, $kodeMatkul);
 
-                if ($exists) {
-                    // Sengaja tidak masuk $errors — ini bukan masalah yang perlu ditinjau admin,
-                    // cukup dihitung lewat skip_count (ditampilkan di kartu "Dilewati").
+                // Cek "sudah terdaftar" di KELAS MANA PUN untuk mata kuliah & semester ini, bukan
+                // hanya di kelas yang terpilih — itu yang dulu meloloskan pendaftaran ganda.
+                $sudahTerdaftar = PendaftaranKrs::krsMataKuliahSama((int) $mahasiswa->id, (int) $matkul->id, (int) $semester->id);
+                if ($sudahTerdaftar) {
+                    if ($kelas && (int) $kelas->id !== (int) $sudahTerdaftar->id_kelas) {
+                        // Terdaftar, tapi di kelas yang tidak sesuai kelompok/angkatannya — perlu
+                        // ditinjau admin, jadi dilaporkan, bukan dilewati diam-diam.
+                        $errors[] = "Baris {$rowNumber}: ".PendaftaranKrs::pesanSudahTerdaftar($sudahTerdaftar)
+                            .' Kelas yang sesuai kelompok/angkatan mahasiswa adalah '.PendaftaranKrs::labelKelas($kelas).'.';
+
+                        continue;
+                    }
+
+                    // Sengaja tidak masuk $errors — baris yang sudah diimpor sebelumnya bukan masalah
+                    // yang perlu ditinjau admin, cukup dihitung lewat skip_count ("Dilewati").
                     $skipCount++;
+
+                    continue;
+                }
+
+                if (! $kelas) {
+                    $errors[] = "Baris {$rowNumber}: {$gagalKelas}";
 
                     continue;
                 }

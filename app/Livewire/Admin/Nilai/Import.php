@@ -9,6 +9,7 @@ use App\Models\Mahasiswa;
 use App\Models\Matkul;
 use App\Models\Nilai;
 use App\Models\Semester;
+use App\Services\PendaftaranKrs;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -140,39 +141,45 @@ class Import extends Component
                     continue;
                 }
 
-                // Kelas WAJIB milik prodi mahasiswa. Fallback lintas-prodi sudah dihapus: kalau
-                // prodi mahasiswa tidak punya kelasnya, nilai akan menempel ke kelas prodi lain.
-                $kelas = Kelas::whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
-                    ->where('id_semester', $semester->id)
-                    ->where('id_prodi', $mahasiswa->id_prodi)
-                    ->first();
+                // Nilai menempel ke pendaftaran yang SUDAH ada: cari KRS mahasiswa untuk mata kuliah &
+                // semester ini di kelas prodinya yang mana pun — bukan menebak satu kelas dengan
+                // ->first() lalu mencari KRS di kelas tebakan itu (yang meleset untuk kelas paralel
+                // dan menempelkan nilai ke pendaftaran yang salah). Lihat App\Services\PendaftaranKrs.
+                $krsList = PendaftaranKrs::krsUntukMataKuliah($mahasiswa, (int) $matkul->id, (int) $semester->id);
 
-                if (! $kelas) {
-                    // Kalau kelasnya ternyata ada di prodi lain, sebutkan — supaya admin tahu ini
-                    // soal ketidakcocokan prodi, bukan kelas yang belum dibuat.
-                    $prodiKelasLain = Kelas::with('prodi')
-                        ->whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
-                        ->where('id_semester', $semester->id)
-                        ->first()?->prodi?->nama;
-
-                    $errors[] = "Baris {$rowNumber}: Kelas dengan semester '{$kodeSemester}' dan mata kuliah '{$kodeMatkul}' tidak ditemukan pada prodi mahasiswa."
-                        .($prodiKelasLain ? " Kelas mata kuliah ini adanya di prodi '{$prodiKelasLain}', dan nilai tidak bisa ditempelkan ke kelas prodi lain." : '');
+                if ($krsList->count() > 1) {
+                    $daftarKelas = $krsList->map(fn ($k) => PendaftaranKrs::labelKelas($k->kelas))->implode(', ');
+                    $errors[] = "Baris {$rowNumber}: Mahasiswa NIM '{$nim}' terdaftar di {$krsList->count()} kelas paralel untuk mata kuliah '{$kodeMatkul}' semester '{$kodeSemester}' ({$daftarKelas}). Nilai tidak ditempelkan sampai KRS gandanya dibereskan.";
 
                     continue;
                 }
 
-                $krs = Krs::where('id_mahasiswa', $mahasiswa->id)
-                    ->where('id_kelas', $kelas->id)
-                    ->whereNull('deleted_at')
-                    ->first();
+                if ($krsList->isEmpty()) {
+                    $adaKelasDiProdi = Kelas::whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
+                        ->where('id_semester', $semester->id)
+                        ->where('id_prodi', $mahasiswa->id_prodi)
+                        ->exists();
 
-                if (! $krs) {
-                    // Kelas sudah dipastikan berprodi sama dengan mahasiswa, jadi kalau KRS-nya
-                    // tetap tidak ada, memang mahasiswanya belum mengontrak kelas ini.
+                    if (! $adaKelasDiProdi) {
+                        // Kalau kelasnya ternyata ada di prodi lain, sebutkan — supaya admin tahu ini
+                        // soal ketidakcocokan prodi, bukan kelas yang belum dibuat.
+                        $prodiKelasLain = Kelas::with('prodi')
+                            ->whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
+                            ->where('id_semester', $semester->id)
+                            ->first()?->prodi?->nama;
+
+                        $errors[] = "Baris {$rowNumber}: Kelas dengan semester '{$kodeSemester}' dan mata kuliah '{$kodeMatkul}' tidak ditemukan pada prodi mahasiswa."
+                            .($prodiKelasLain ? " Kelas mata kuliah ini adanya di prodi '{$prodiKelasLain}', dan nilai tidak bisa ditempelkan ke kelas prodi lain." : '');
+
+                        continue;
+                    }
+
                     $errors[] = "Baris {$rowNumber}: KRS dengan NIM '{$nim}', mata kuliah '{$kodeMatkul}', dan semester '{$kodeSemester}' tidak ditemukan.";
 
                     continue;
                 }
+
+                $krs = $krsList->first();
 
                 if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                     $errors[] = "Baris {$rowNumber}: Anda tidak memiliki akses ke mahasiswa NIM '{$nim}' (prodi di luar scope).";

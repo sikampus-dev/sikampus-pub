@@ -15,6 +15,7 @@ use App\Models\Notifikasi;
 use App\Models\Perkuliahan;
 use App\Models\Semester;
 use App\Services\KeuanganAksesMahasiswaService;
+use App\Services\PendaftaranKrs;
 use App\Services\UrutanMatkulService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -607,6 +608,19 @@ class KrsController extends Controller
                     $errors[] = [
                         'index' => $index,
                         'message' => 'KRS dengan kelas ini sudah ada untuk mahasiswa ini.',
+                        'field' => 'id_kelas',
+                    ];
+
+                    continue;
+                }
+
+                // Sama persis dengan App\Livewire\Admin\Krs\Form::saveCreate.
+                $kelasBaris = Kelas::find($data['id_kelas']);
+                $sudahTerdaftar = $kelasBaris ? PendaftaranKrs::krsMataKuliahSamaDenganKelas((int) $idMahasiswa, $kelasBaris) : null;
+                if ($sudahTerdaftar) {
+                    $errors[] = [
+                        'index' => $index,
+                        'message' => PendaftaranKrs::pesanSudahTerdaftar($sudahTerdaftar),
                         'field' => 'id_kelas',
                     ];
 
@@ -1284,6 +1298,14 @@ class KrsController extends Controller
                     ],
                 ], 422);
             }
+
+            $kelasBaru = Kelas::find($validated['id_kelas']);
+            $sudahTerdaftar = $kelasBaru ? PendaftaranKrs::krsMataKuliahSamaDenganKelas((int) $krs->id_mahasiswa, $kelasBaru, (int) $krs->id) : null;
+            if ($sudahTerdaftar) {
+                $pesan = PendaftaranKrs::pesanSudahTerdaftar($sudahTerdaftar);
+
+                return response()->json(['message' => $pesan, 'errors' => ['id_kelas' => [$pesan]]], 422);
+            }
         }
 
         if ($user && $user->hasScopeRestriction() && (int) $validated['id_kelas'] !== (int) $krs->id_kelas) {
@@ -1501,30 +1523,6 @@ class KrsController extends Controller
                     continue;
                 }
 
-                // Find kelas by kurikulum_matkul and semester
-                // Kelas WAJIB milik prodi mahasiswa. Fallback lintas-prodi sudah dihapus: kalau
-                // prodi mahasiswa tidak punya kelasnya, mendaftarkan dia ke kelas prodi lain
-                // menghasilkan data yang salah tanpa peringatan apa pun.
-                $kelas = Kelas::whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
-                    ->where('id_semester', $semester->id)
-                    ->where('id_prodi', $mahasiswa->id_prodi)
-                    ->first();
-
-                if (! $kelas) {
-                    // Kalau kelasnya ternyata ada di prodi lain, sebutkan — supaya admin tahu ini
-                    // soal ketidakcocokan prodi, bukan kelas yang belum dibuat.
-                    $prodiKelasLain = Kelas::with('prodi')
-                        ->whereIn('id_kurikulum_matkul', $kurikulumMatkulList->pluck('id'))
-                        ->where('id_semester', $semester->id)
-                        ->first()?->prodi?->nama;
-
-                    $errors[] = "Baris {$rowNumber}: Kelas dengan semester '{$semester->kode}' dan mata kuliah '{$kodeMatkul}' tidak ditemukan pada prodi mahasiswa."
-                        .($prodiKelasLain ? " Kelas mata kuliah ini adanya di prodi '{$prodiKelasLain}', dan mahasiswa tidak bisa didaftarkan ke kelas prodi lain." : '');
-
-                    continue;
-                }
-
-                // Cukup cek prodi mahasiswa: kelas di atas sudah dipastikan berprodi sama.
                 if ($user && $user->hasScopeRestriction()) {
                     $allowedProdiIds = $user->getAllowedProdiIds();
                     if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
@@ -1534,16 +1532,26 @@ class KrsController extends Controller
                     }
                 }
 
-                // Check unique constraint: id_mahasiswa, id_kelas
-                $exists = Krs::where('id_mahasiswa', $mahasiswa->id)
-                    ->where('id_kelas', $kelas->id)
-                    ->whereNull('deleted_at')
-                    ->exists();
+                // Sama persis dengan App\Livewire\Admin\Krs\Import — kelas ditentukan dari kelompok
+                // kelas & angkatan mahasiswa, dan cek "sudah terdaftar" berlaku di kelas mana pun.
+                [$kelas, $gagalKelas] = PendaftaranKrs::tentukanKelas($mahasiswa, $kurikulumMatkulList->pluck('id'), $semester, $kodeMatkul);
 
-                if ($exists) {
-                    // Sengaja tidak masuk $errors — ini bukan masalah yang perlu ditinjau admin,
-                    // cukup dihitung lewat skip_count (ditampilkan di kartu "Dilewati").
+                $sudahTerdaftar = PendaftaranKrs::krsMataKuliahSama((int) $mahasiswa->id, (int) $matkul->id, (int) $semester->id);
+                if ($sudahTerdaftar) {
+                    if ($kelas && (int) $kelas->id !== (int) $sudahTerdaftar->id_kelas) {
+                        $errors[] = "Baris {$rowNumber}: ".PendaftaranKrs::pesanSudahTerdaftar($sudahTerdaftar)
+                            .' Kelas yang sesuai kelompok/angkatan mahasiswa adalah '.PendaftaranKrs::labelKelas($kelas).'.';
+
+                        continue;
+                    }
+
                     $skipCount++;
+
+                    continue;
+                }
+
+                if (! $kelas) {
+                    $errors[] = "Baris {$rowNumber}: {$gagalKelas}";
 
                     continue;
                 }
@@ -2366,6 +2374,16 @@ class KrsController extends Controller
         $krsData = $validated['krs'];
         $results = [];
         $errors = [];
+
+        // Sama persis dengan App\Livewire\Mahasiswa\Krs\Pengajuan::submit — satu mata kuliah hanya
+        // sekali per semester, termasuk dua kelas paralel dari mata kuliah yang sama di pengajuan ini.
+        $pelanggaran = PendaftaranKrs::pelanggaranPengajuan((int) $mahasiswa->id, collect($krsData)->pluck('id_kelas'));
+        if ($pelanggaran !== []) {
+            return response()->json([
+                'message' => implode(' ', $pelanggaran),
+                'errors' => ['id_kelas' => $pelanggaran],
+            ], 422);
+        }
 
         // Validasi prasyarat: untuk setiap kelas baru/restored, MK prasyarat harus sudah lulus (nilai huruf minimal C di tabel nilai)
         $prasyaratViolations = [];

@@ -12,6 +12,7 @@ use App\Models\Nilai;
 use App\Models\Notifikasi;
 use App\Models\Semester;
 use App\Services\KeuanganAksesMahasiswaService;
+use App\Services\PendaftaranKrs;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
@@ -250,6 +251,15 @@ class Pengajuan extends Component
 
         if (! $this->financeCheck['allowed'] && $this->financeCheck['persentase_minimum_required'] !== null) {
             $this->addError('selectedKelas', 'Pengajuan KRS belum dapat dilakukan karena persyaratan administratif keuangan belum terpenuhi.');
+
+            return;
+        }
+
+        // Satu mata kuliah hanya sekali per semester — termasuk memilih dua kelas paralel dari mata
+        // kuliah yang sama di pengajuan ini. Lihat App\Services\PendaftaranKrs.
+        $pelanggaran = PendaftaranKrs::pelanggaranPengajuan($this->mahasiswaId, $newSelections->pluck('id_kelas'));
+        if ($pelanggaran !== []) {
+            $this->addError('selectedKelas', implode(' ', $pelanggaran));
 
             return;
         }

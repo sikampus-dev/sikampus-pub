@@ -9,6 +9,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -16,10 +17,17 @@ class Index extends Component
 {
     use WithPagination;
 
+    // #[Url] supaya state ini bisa dibaca ulang lewat query string ketika user kembali dari
+    // halaman detail/ubah (lihat Nilai\Concerns\ForwardsIndexState). `page` sudah ditangani
+    // WithPagination; filter tidak — tanpa ini, kembali ke ?page=3 memulihkan halamannya tapi
+    // membuang filternya, sehingga yang tampil halaman 3 dari daftar yang lain.
+    #[Url(as: 'search')]
     public string $search = '';
 
+    #[Url(as: 'id_prodi')]
     public string $filterProdi = '';
 
+    #[Url(as: 'id_semester_masuk')]
     public string $filterSemesterMasuk = '';
 
     public int $perPage = 10;
@@ -146,8 +154,18 @@ class Index extends Component
             ['path' => request()->url(), 'pageName' => 'page']
         );
 
+        // Diteruskan ke link Detail, lalu dibaca kembali oleh Nilai\Concerns\ForwardsIndexState.
+        // Kunci harus sama dengan alias #[Url] di atas.
+        $returnQuery = http_build_query(array_filter([
+            'search' => $this->search !== '' ? $this->search : null,
+            'id_prodi' => $this->filterProdi !== '' ? $this->filterProdi : null,
+            'id_semester_masuk' => $this->filterSemesterMasuk !== '' ? $this->filterSemesterMasuk : null,
+            'page' => $nilaiList->currentPage() > 1 ? $nilaiList->currentPage() : null,
+        ], fn ($value) => $value !== null));
+
         return view('livewire.admin.nilai.index', [
             'nilaiList' => $nilaiList,
+            'returnQuery' => $returnQuery,
         ])->extends('layouts.web');
     }
 }

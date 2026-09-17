@@ -86,7 +86,7 @@
                             <td class="px-4 py-3 text-center font-medium text-neutral-900">{{ (int) $row->jumlah_mata_kuliah }}</td>
                             <td class="px-4 py-3 text-right">
                                 <a
-                                    href="{{ route('admin.akademik.nilai.show', $row->id) }}"
+                                    href="{{ route('admin.akademik.nilai.show', $row->id) }}{{ $returnQuery ? '?'.$returnQuery : '' }}"
                                     class="inline-flex items-center justify-center rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                                     title="Lihat Detail"
                                 >
