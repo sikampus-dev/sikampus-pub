@@ -204,3 +204,77 @@ it('admin dengan scope prodi tidak bisa menghapus ktm di luar scope-nya lewat id
 it('redirects unauthenticated users to the login page', function () {
     $this->get(route('admin.administrasi.ktm'))->assertRedirect(route('login'));
 });
+
+it('saves ktm header style settings', function () {
+    $admin = adminUser();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('activeTab', 'header')
+        ->set('headerAlign', 'left')
+        ->set('headerTitleColor', '#ff0000')
+        ->set('headerTitleSize', 30)
+        ->set('headerUnivColor', '#00ff00')
+        ->set('headerUnivSize', 40)
+        ->call('saveHeaderSettings')
+        ->assertHasNoErrors();
+
+    expect(Setting::where('key', 'ktm_header_align')->value('value'))->toBe('left');
+    expect(Setting::where('key', 'ktm_header_title_color')->value('value'))->toBe('ff0000');
+    expect(Setting::where('key', 'ktm_header_title_size')->value('value'))->toBe('30');
+    expect(Setting::where('key', 'ktm_header_univ_color')->value('value'))->toBe('00ff00');
+    expect(Setting::where('key', 'ktm_header_univ_size')->value('value'))->toBe('40');
+});
+
+it('rejects an invalid header color when saving header settings', function () {
+    $admin = adminUser();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('activeTab', 'header')
+        ->set('headerTitleColor', 'not-a-color')
+        ->call('saveHeaderSettings')
+        ->assertHasErrors(['headerTitleColor']);
+
+    expect(Setting::where('key', 'ktm_header_title_color')->exists())->toBeFalse();
+});
+
+it('generates a ktm image with a long name that wraps instead of throwing', function () {
+    seedKtmTemplate();
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create([
+        'nama' => 'Mahasiswa Dengan Nama Yang Sangat Sangat Panjang Sekali Untuk Menguji Pembungkusan Baris',
+        'nim' => '2024555099',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->call('selectMahasiswa', $mahasiswa->id, $mahasiswa->nim.' - '.$mahasiswa->nama)
+        ->call('save')
+        ->assertRedirect(route('admin.administrasi.ktm'));
+
+    $ktm = Ktm::where('id_mahasiswa', $mahasiswa->id)->firstOrFail();
+    expect($ktm->file)->not->toBeNull();
+    Storage::disk('public')->assertExists($ktm->file);
+});
+
+it('generates a ktm image using custom header alignment, color, and size settings', function () {
+    seedKtmTemplate();
+    Setting::create(['key' => 'ktm_header_align', 'value' => 'center', 'description' => 't', 'order' => 0]);
+    Setting::create(['key' => 'ktm_header_title_color', 'value' => 'ff0000', 'description' => 't', 'order' => 0]);
+    Setting::create(['key' => 'ktm_header_univ_color', 'value' => '0000ff', 'description' => 't', 'order' => 0]);
+    Setting::create(['key' => 'ktm_header_title_size', 'value' => '20', 'description' => 't', 'order' => 0]);
+    Setting::create(['key' => 'ktm_header_univ_size', 'value' => '30', 'description' => 't', 'order' => 0]);
+
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create(['nama' => 'Test Header Style', 'nim' => '2024555088']);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->call('selectMahasiswa', $mahasiswa->id, $mahasiswa->nim.' - '.$mahasiswa->nama)
+        ->call('save')
+        ->assertRedirect(route('admin.administrasi.ktm'));
+
+    $ktm = Ktm::where('id_mahasiswa', $mahasiswa->id)->firstOrFail();
+    Storage::disk('public')->assertExists($ktm->file);
+});

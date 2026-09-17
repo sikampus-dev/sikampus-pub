@@ -33,7 +33,7 @@
     {{-- Tab Navigation --}}
     <div class="mb-6 border-b border-neutral-200">
         <nav class="-mb-px flex flex-wrap gap-6">
-            @foreach ([['key' => 'data', 'label' => 'Data KTM'], ['key' => 'template', 'label' => 'Template KTM']] as $tab)
+            @foreach ([['key' => 'data', 'label' => 'Data KTM'], ['key' => 'template', 'label' => 'Template KTM'], ['key' => 'header', 'label' => 'Pengaturan Header']] as $tab)
                 <button
                     type="button"
                     wire:click="setTab('{{ $tab['key'] }}')"
@@ -191,6 +191,73 @@
                 </div>
             </div>
         </div>
+    @endif
+
+    {{-- Tab: Pengaturan Header --}}
+    @if ($activeTab === 'header')
+        <form wire:submit="saveHeaderSettings" class="rounded-2xl bg-white p-6 shadow-border">
+            <h3 class="mb-2 text-sm font-semibold text-neutral-900">Gaya Header KTM</h3>
+            <p class="mb-6 text-sm text-neutral-500">
+                Mengatur tampilan judul "Kartu Tanda Mahasiswa" dan nama perguruan tinggi di bagian atas kartu.
+                Perubahan hanya berlaku untuk gambar KTM yang dibuat/dibuat ulang setelah pengaturan ini disimpan.
+            </p>
+
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div class="space-y-4 rounded-xl border border-neutral-100 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Judul "Kartu Tanda Mahasiswa"</p>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Warna Teks</label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" wire:model="headerTitleColor" class="h-10 w-14 shrink-0 cursor-pointer rounded-lg shadow-border" />
+                            <input type="text" wire:model="headerTitleColor" maxlength="7" class="w-full rounded-lg px-3 py-2.5 text-sm uppercase outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('headerTitleColor') ring-2 ring-red-500 @enderror" />
+                        </div>
+                        @error('headerTitleColor') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Ukuran Font (px)</label>
+                        <input type="number" wire:model="headerTitleSize" min="8" max="120" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('headerTitleSize') ring-2 ring-red-500 @enderror" />
+                        @error('headerTitleSize') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+
+                <div class="space-y-4 rounded-xl border border-neutral-100 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Nama Perguruan Tinggi</p>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Warna Teks</label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" wire:model="headerUnivColor" class="h-10 w-14 shrink-0 cursor-pointer rounded-lg shadow-border" />
+                            <input type="text" wire:model="headerUnivColor" maxlength="7" class="w-full rounded-lg px-3 py-2.5 text-sm uppercase outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('headerUnivColor') ring-2 ring-red-500 @enderror" />
+                        </div>
+                        @error('headerUnivColor') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Ukuran Font (px)</label>
+                        <input type="number" wire:model="headerUnivSize" min="8" max="120" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('headerUnivSize') ring-2 ring-red-500 @enderror" />
+                        @error('headerUnivSize') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 max-w-xs">
+                <label class="mb-1.5 block text-sm font-medium text-neutral-700">Perataan Header</label>
+                <select wire:model="headerAlign" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('headerAlign') ring-2 ring-red-500 @enderror">
+                    <option value="left">Kiri</option>
+                    <option value="center">Tengah</option>
+                    <option value="right">Kanan</option>
+                </select>
+                @error('headerAlign') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button
+                    type="submit"
+                    class="inline-flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800"
+                >
+                    <i data-lucide="save" class="h-4 w-4" aria-hidden="true"></i>
+                    Simpan Pengaturan
+                </button>
+            </div>
+        </form>
     @endif
 
     {{-- Modal: Konfirmasi Hapus --}}

@@ -16,6 +16,16 @@ class KtmImageGenerator
 
     public const SETTING_UNIV_LOGO = 'app_univ_logo';
 
+    public const SETTING_HEADER_ALIGN = 'ktm_header_align';
+
+    public const SETTING_HEADER_TITLE_COLOR = 'ktm_header_title_color';
+
+    public const SETTING_HEADER_TITLE_SIZE = 'ktm_header_title_size';
+
+    public const SETTING_HEADER_UNIV_COLOR = 'ktm_header_univ_color';
+
+    public const SETTING_HEADER_UNIV_SIZE = 'ktm_header_univ_size';
+
     public function __construct(
         private ImageManager $imageManager
     ) {}
@@ -53,25 +63,35 @@ class KtmImageGenerator
         $dataX = $this->placeStudentFoto($image, $m, $w, $h, $layout);
 
         $univName = $this->universityNameFromSettings();
+        $headerStyle = $this->resolveHeaderStyle();
+        $headerAnchorX = match ($headerStyle['align']) {
+            'left' => (float) ($layout['header_anchor_x_left'] ?? 0.06),
+            'center' => 0.5,
+            default => (float) ($layout['header_anchor_x'] ?? 0.94),
+        };
 
         $this->drawTextBlock(
             $image,
             (string) config('ktm.title', 'Kartu Tanda Mahasiswa'),
-            (int) ($w * (float) ($layout['header_anchor_x'] ?? 0.94)),
+            (int) ($w * $headerAnchorX),
             (int) ($h * (float) ($layout['header_title_y'] ?? 0.09)),
-            (float) ($layout['header_title_size'] ?? 0.028) * $minSide,
+            $headerStyle['title_size'] ?? ((float) ($layout['header_title_size'] ?? 0.028) * $minSide),
             $fontReg,
-            'right',
+            $headerStyle['align'],
+            null,
+            $headerStyle['title_color'],
         );
 
         $this->drawTextBlock(
             $image,
             $univName,
-            (int) ($w * (float) ($layout['header_anchor_x'] ?? 0.94)),
+            (int) ($w * $headerAnchorX),
             (int) ($h * (float) ($layout['header_univ_y'] ?? 0.145)),
-            (float) ($layout['header_univ_size'] ?? 0.04) * $minSide,
+            $headerStyle['univ_size'] ?? ((float) ($layout['header_univ_size'] ?? 0.04) * $minSide),
             $fontBold,
-            'right',
+            $headerStyle['align'],
+            null,
+            $headerStyle['univ_color'],
         );
 
         $nim = strtoupper((string) ($m->nim ?? '—'));
@@ -90,28 +110,35 @@ class KtmImageGenerator
         $lineHeight = (float) ($layout['data_text_line_height'] ?? 1.32);
         /* Jeda antarblok (NIM → NAMA → PRODI) vs tinggi piksel */
         $blockGap = (float) ($layout['data_line_gap'] ?? 0.1) * $h;
-        $charsPerLine = max(12, (int) ($dataMaxW / max(0.1, $lineSize * 0.48)));
 
-        $lines = [
-            $this->formatKtmLine('NIM', $nim),
-            $this->formatKtmLine('NAMA', $nama),
-            $this->formatKtmLine('PRODI', $prodiStr),
+        $fields = [
+            ['NIM', $nim],
+            ['NAMA', $nama],
+            ['PRODI', $prodiStr],
         ];
 
-        foreach ($lines as $line) {
-            $wrapped = $this->mbWordWrapKtm($line, $charsPerLine);
-            $numVisualLines = substr_count($wrapped, "\n") + 1;
-            $this->drawTextBlock(
-                $image,
-                $wrapped,
-                $dataX,
-                $y,
-                $lineSize,
-                $fontBold,
-                'left',
-                $lineHeight,
-            );
-            $y += (int) ($lineSize * $lineHeight * $numVisualLines + $blockGap);
+        foreach ($fields as [$label, $value]) {
+            $prefix = str_pad($label, 5).' : ';
+            $prefixWidthPx = (int) ceil($this->textLineWidthPx($prefix, $lineSize, $fontBold));
+            /* Sisa lebar untuk nilai, konsisten di baris pertama maupun baris lanjutan — supaya
+               baris lanjutan sejajar dengan awal nilai (setelah titik dua), bukan dengan label. */
+            $valueMaxW = max(20, $dataMaxW - $prefixWidthPx);
+            $valueLines = explode("\n", $this->wrapTextToWidth($value, $lineSize, $fontBold, $valueMaxW));
+
+            $this->drawTextBlock($image, $prefix.$valueLines[0], $dataX, $y, $lineSize, $fontBold, 'left');
+            for ($i = 1; $i < count($valueLines); $i++) {
+                $this->drawTextBlock(
+                    $image,
+                    $valueLines[$i],
+                    $dataX + $prefixWidthPx,
+                    $y + (int) ($lineSize * $lineHeight * $i),
+                    $lineSize,
+                    $fontBold,
+                    'left',
+                );
+            }
+
+            $y += (int) ($lineSize * $lineHeight * count($valueLines) + $blockGap);
         }
 
         $filename = 'ktm/ktm_'.(int) $m->id.'_'.date('Ymd_His').'.png';
@@ -290,55 +317,116 @@ class KtmImageGenerator
         return is_readable($abs) ? $abs : null;
     }
 
-    private function formatKtmLine(string $label, string $value): string
-    {
-        return str_pad($label, 5).' : '.mb_strtoupper($value, 'UTF-8');
-    }
-
     /**
-     * Pisah teks multi-kata (UTF-8) agar muat; perkiraan lebar = ~0.48 × font size per karakter.
+     * Pisah teks multi-kata (UTF-8) supaya lebar renderednya tidak pernah melebihi $maxWidthPx —
+     * diukur lewat imagettfbbox() (bbox TTF sungguhan), bukan perkiraan jumlah karakter, supaya
+     * NAMA/PRODI yang panjang benar-benar mengikuti lebar kartu, bukan lebar yang ditebak.
      */
-    private function mbWordWrapKtm(string $str, int $maxChars): string
+    private function wrapTextToWidth(string $text, float $size, string $fontPath, int $maxWidthPx): string
     {
-        if ($maxChars < 6 || $str === '') {
-            return $str;
+        if ($maxWidthPx < 10 || $text === '') {
+            return $text;
         }
 
-        $all = [];
-        foreach (explode("\n", str_replace("\r\n", "\n", $str)) as $sub) {
-            if (mb_strlen($sub) <= $maxChars) {
-                $all[] = $sub;
+        $outputLines = [];
+        foreach (explode("\n", str_replace("\r\n", "\n", $text)) as $paragraph) {
+            if ($this->textLineWidthPx($paragraph, $size, $fontPath) <= $maxWidthPx) {
+                $outputLines[] = $paragraph;
 
                 continue;
             }
-            $line = '';
-            $words = preg_split('/\s+/u', $sub, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+            $current = '';
+            $words = preg_split('/\s+/u', $paragraph, -1, PREG_SPLIT_NO_EMPTY) ?: [];
             foreach ($words as $word) {
-                if (mb_strlen($word) > $maxChars) {
-                    if ($line !== '') {
-                        $all[] = $line;
-                        $line = '';
+                if ($this->textLineWidthPx($word, $size, $fontPath) > $maxWidthPx) {
+                    if ($current !== '') {
+                        $outputLines[] = $current;
+                        $current = '';
                     }
-                    for ($i = 0, $L = mb_strlen($word); $i < $L; $i += $maxChars) {
-                        $all[] = mb_substr($word, $i, $maxChars);
+                    $chunk = '';
+                    foreach (preg_split('//u', $word, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+                        $tryChunk = $chunk.$char;
+                        if ($chunk !== '' && $this->textLineWidthPx($tryChunk, $size, $fontPath) > $maxWidthPx) {
+                            $outputLines[] = $chunk;
+                            $chunk = $char;
+                        } else {
+                            $chunk = $tryChunk;
+                        }
                     }
+                    $current = $chunk;
 
                     continue;
                 }
-                $try = $line === '' ? $word : $line.' '.$word;
-                if (mb_strlen($try) > $maxChars) {
-                    $all[] = $line;
-                    $line = $word;
+
+                $tryLine = $current === '' ? $word : $current.' '.$word;
+                if ($current !== '' && $this->textLineWidthPx($tryLine, $size, $fontPath) > $maxWidthPx) {
+                    $outputLines[] = $current;
+                    $current = $word;
                 } else {
-                    $line = $try;
+                    $current = $tryLine;
                 }
             }
-            if ($line !== '') {
-                $all[] = $line;
+            if ($current !== '') {
+                $outputLines[] = $current;
             }
         }
 
-        return implode("\n", $all);
+        return implode("\n", $outputLines);
+    }
+
+    /**
+     * Lebar rendered teks (px) untuk font+ukuran tertentu, lewat bounding box TTF GD sungguhan
+     * (fungsi yang sama dipakai Intervention di baliknya, jadi hasil ukurnya konsisten dengan
+     * yang benar-benar digambar). Fallback ke perkiraan kasar kalau ekstensi GD/FreeType gagal.
+     */
+    private function textLineWidthPx(string $text, float $size, string $fontPath): float
+    {
+        if ($text === '') {
+            return 0.0;
+        }
+
+        $bbox = @imagettfbbox($size, 0, $fontPath, $text);
+        if ($bbox === false) {
+            return mb_strlen($text) * $size * 0.5;
+        }
+
+        return (float) abs($bbox[2] - $bbox[0]);
+    }
+
+    /**
+     * Gaya header (perataan, warna, ukuran font) dari Pengaturan > KTM > Pengaturan Header, jatuh
+     * ke default di config/ktm.php kalau belum pernah diatur.
+     *
+     * @return array{align: string, title_color: string, univ_color: string, title_size: ?float, univ_size: ?float}
+     */
+    private function resolveHeaderStyle(): array
+    {
+        $rows = Setting::query()
+            ->whereIn('key', [
+                self::SETTING_HEADER_ALIGN,
+                self::SETTING_HEADER_TITLE_COLOR,
+                self::SETTING_HEADER_TITLE_SIZE,
+                self::SETTING_HEADER_UNIV_COLOR,
+                self::SETTING_HEADER_UNIV_SIZE,
+            ])
+            ->pluck('value', 'key');
+
+        $align = (string) ($rows->get(self::SETTING_HEADER_ALIGN) ?: config('ktm.layout.header_align', 'right'));
+        if (! in_array($align, ['left', 'center', 'right'], true)) {
+            $align = 'right';
+        }
+
+        $titleSize = $rows->get(self::SETTING_HEADER_TITLE_SIZE);
+        $univSize = $rows->get(self::SETTING_HEADER_UNIV_SIZE);
+
+        return [
+            'align' => $align,
+            'title_color' => ltrim((string) ($rows->get(self::SETTING_HEADER_TITLE_COLOR) ?: config('ktm.layout.header_title_color', '000000')), '#'),
+            'univ_color' => ltrim((string) ($rows->get(self::SETTING_HEADER_UNIV_COLOR) ?: config('ktm.layout.header_univ_color', '000000')), '#'),
+            'title_size' => $titleSize !== null && $titleSize !== '' ? (float) $titleSize : null,
+            'univ_size' => $univSize !== null && $univSize !== '' ? (float) $univSize : null,
+        ];
     }
 
     private function drawTextBlock(
@@ -349,12 +437,13 @@ class KtmImageGenerator
         float $size,
         string $fontPath,
         string $align,
-        ?float $lineHeight = null
+        ?float $lineHeight = null,
+        string $color = '000000'
     ): void {
-        $image->text($text, $x, $y, function ($font) use ($size, $fontPath, $align, $lineHeight) {
+        $image->text($text, $x, $y, function ($font) use ($size, $fontPath, $align, $lineHeight, $color) {
             $font->file($fontPath);
             $font->size($size);
-            $font->color('000000');
+            $font->color($color);
             $font->align($align);
             $font->valign('top');
             if ($lineHeight !== null) {

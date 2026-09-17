@@ -37,6 +37,39 @@ class Index extends Component
 
     public $templateFile = null;
 
+    public string $headerAlign = 'right';
+
+    public string $headerTitleColor = '#000000';
+
+    public int $headerTitleSize = 24;
+
+    public string $headerUnivColor = '#000000';
+
+    public int $headerUnivSize = 38;
+
+    public function mount(): void
+    {
+        $tw = (int) config('ktm.template_width', 800);
+        $th = (int) config('ktm.template_height', 457);
+        $minSide = max(1, min($tw, $th));
+
+        $rows = Setting::query()
+            ->whereIn('key', [
+                KtmImageGenerator::SETTING_HEADER_ALIGN,
+                KtmImageGenerator::SETTING_HEADER_TITLE_COLOR,
+                KtmImageGenerator::SETTING_HEADER_TITLE_SIZE,
+                KtmImageGenerator::SETTING_HEADER_UNIV_COLOR,
+                KtmImageGenerator::SETTING_HEADER_UNIV_SIZE,
+            ])
+            ->pluck('value', 'key');
+
+        $this->headerAlign = (string) ($rows->get(KtmImageGenerator::SETTING_HEADER_ALIGN) ?: config('ktm.layout.header_align', 'right'));
+        $this->headerTitleColor = '#'.ltrim((string) ($rows->get(KtmImageGenerator::SETTING_HEADER_TITLE_COLOR) ?: config('ktm.layout.header_title_color', '000000')), '#');
+        $this->headerUnivColor = '#'.ltrim((string) ($rows->get(KtmImageGenerator::SETTING_HEADER_UNIV_COLOR) ?: config('ktm.layout.header_univ_color', '000000')), '#');
+        $this->headerTitleSize = (int) ($rows->get(KtmImageGenerator::SETTING_HEADER_TITLE_SIZE) ?: round((float) config('ktm.layout.header_title_size', 0.053) * $minSide));
+        $this->headerUnivSize = (int) ($rows->get(KtmImageGenerator::SETTING_HEADER_UNIV_SIZE) ?: round((float) config('ktm.layout.header_univ_size', 0.083) * $minSide));
+    }
+
     public function setTab(string $tab): void
     {
         $this->activeTab = $tab;
@@ -200,20 +233,64 @@ class Index extends Component
             return;
         }
 
-        if ($row) {
-            $row->update(['value' => $path]);
-        } else {
-            Setting::create([
-                'key' => self::SETTING_KEY_KTM_TEMPLATE,
-                'value' => $path,
-                'description' => 'Template gambar KTM (admin)',
-                'order' => 0,
-            ]);
-        }
+        $this->upsertSetting(self::SETTING_KEY_KTM_TEMPLATE, $path, 'Template gambar KTM (admin)');
 
         $this->reset('templateFile');
         unset($this->currentTemplateUrl);
         session()->flash('status', 'Template KTM berhasil disimpan.');
+    }
+
+    /**
+     * Simpan pengaturan tampilan header KTM (warna teks, ukuran font, perataan). Tidak
+     * mempengaruhi gambar KTM yang sudah pernah dibuat — hanya berlaku untuk generate/regenerate
+     * berikutnya, sama seperti pola perubahan template gambar di atas.
+     */
+    public function saveHeaderSettings(): void
+    {
+        $validated = $this->validate([
+            'headerAlign' => ['required', 'in:left,center,right'],
+            'headerTitleColor' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'headerTitleSize' => ['required', 'integer', 'min:8', 'max:120'],
+            'headerUnivColor' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'headerUnivSize' => ['required', 'integer', 'min:8', 'max:120'],
+        ], [], [
+            'headerAlign' => 'perataan header',
+            'headerTitleColor' => 'warna teks judul',
+            'headerTitleSize' => 'ukuran font judul',
+            'headerUnivColor' => 'warna teks nama perguruan tinggi',
+            'headerUnivSize' => 'ukuran font nama perguruan tinggi',
+        ]);
+
+        $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_ALIGN, $validated['headerAlign'], 'Perataan header KTM (left/center/right)');
+        $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_TITLE_COLOR, ltrim($validated['headerTitleColor'], '#'), 'Warna teks judul "Kartu Tanda Mahasiswa" pada KTM');
+        $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_TITLE_SIZE, (string) $validated['headerTitleSize'], 'Ukuran font judul KTM dalam px');
+        $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_UNIV_COLOR, ltrim($validated['headerUnivColor'], '#'), 'Warna teks nama perguruan tinggi pada KTM');
+        $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_UNIV_SIZE, (string) $validated['headerUnivSize'], 'Ukuran font nama perguruan tinggi pada KTM dalam px');
+
+        session()->flash('status', 'Pengaturan header KTM berhasil disimpan. Klik "Buat Ulang Gambar" pada data KTM yang sudah ada agar perubahan ikut diterapkan.');
+    }
+
+    /**
+     * Simpan/perbarui satu baris `settings`, memulihkan lebih dulu kalau baris itu ter-soft-delete
+     * — dipakai baik oleh template gambar maupun pengaturan header di atas.
+     */
+    private function upsertSetting(string $key, string $value, string $description): void
+    {
+        $row = Setting::withTrashed()->where('key', $key)->first();
+        if ($row?->trashed()) {
+            $row->restore();
+        }
+
+        if ($row) {
+            $row->update(['value' => $value]);
+        } else {
+            Setting::create([
+                'key' => $key,
+                'value' => $value,
+                'description' => $description,
+                'order' => 0,
+            ]);
+        }
     }
 
     #[Computed]

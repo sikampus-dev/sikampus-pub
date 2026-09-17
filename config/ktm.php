@@ -39,10 +39,16 @@ return [
     'layout' => [
         /* Ukuran teks: dikalikan min(lebar, tinggi) piksel — diset agar sekitar 24–38 px @ 800×457 */
         'header_anchor_x' => 0.94,
+        /* Anchor X saat perataan header diatur ke kiri (mirror dari 1 - header_anchor_x) */
+        'header_anchor_x_left' => 0.06,
         'header_title_y' => 0.1,
         'header_title_size' => 0.053,
         'header_univ_y' => 0.16,
         'header_univ_size' => 0.083,
+        /* Fallback bila belum diatur lewat Pengaturan > KTM > Pengaturan Header (tabel settings) */
+        'header_align' => 'right',
+        'header_title_color' => '000000',
+        'header_univ_color' => '000000',
         /* Foto mahasiswa (kolom `mahasiswa.foto`); placeholder jika kosong — kiri, di bawah area logo */
         'photo_x' => 0.04,
         /* Di bawah logo: logo_offset_y + logo_max_height ≈ 0,28 — sesuaikan bila perlu */
