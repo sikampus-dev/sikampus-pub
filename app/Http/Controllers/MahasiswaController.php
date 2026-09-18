@@ -120,11 +120,16 @@ class MahasiswaController extends Controller
             'handphone' => ['nullable', 'string', 'max:20'],
             'penerima_kps' => ['nullable', 'string', 'max:10'],
             'no_kps' => ['nullable', 'string', 'max:50'],
+            // 'ayah'/'ibu' sempat tidak punya aturan di sini, padahal form admin menampilkan
+            // inputnya — akibatnya nama ayah/ibu yang diketik admin ikut tersaring keluar dari
+            // \$validated dan tidak pernah tersimpan (hanya 'wali' yang lolos).
+            'ayah' => ['nullable', 'string', 'max:255'],
             'nik_ayah' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ayah' => ['nullable', 'date'],
             'id_pddk_ayah' => ['nullable', 'integer'],
             'id_pekerjaan_ayah' => ['nullable', 'integer'],
             'id_penghasilan_ayah' => ['nullable', 'integer'],
+            'ibu' => ['nullable', 'string', 'max:255'],
             'nik_ibu' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ibu' => ['nullable', 'date'],
             'id_pddk_ibu' => ['nullable', 'integer'],
@@ -376,11 +381,16 @@ class MahasiswaController extends Controller
             'handphone' => ['nullable', 'string', 'max:20'],
             'penerima_kps' => ['nullable', 'string', 'max:10'],
             'no_kps' => ['nullable', 'string', 'max:50'],
+            // 'ayah'/'ibu' sempat tidak punya aturan di sini, padahal form admin menampilkan
+            // inputnya — akibatnya nama ayah/ibu yang diketik admin ikut tersaring keluar dari
+            // \$validated dan tidak pernah tersimpan (hanya 'wali' yang lolos).
+            'ayah' => ['nullable', 'string', 'max:255'],
             'nik_ayah' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ayah' => ['nullable', 'date'],
             'id_pddk_ayah' => ['nullable', 'integer'],
             'id_pekerjaan_ayah' => ['nullable', 'integer'],
             'id_penghasilan_ayah' => ['nullable', 'integer'],
+            'ibu' => ['nullable', 'string', 'max:255'],
             'nik_ibu' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ibu' => ['nullable', 'date'],
             'id_pddk_ibu' => ['nullable', 'integer'],
@@ -508,6 +518,26 @@ class MahasiswaController extends Controller
             'rw' => ['nullable', 'string', 'max:10'],
             'dusun' => ['nullable', 'string', 'max:100'],
             'kelurahan' => ['nullable', 'string', 'max:100'],
+            // Data orang tua/wali — aturannya disalin dari update() supaya jalur self-service dan
+            // jalur admin memvalidasi kolom yang sama dengan cara yang sama.
+            'ayah' => ['nullable', 'string', 'max:255'],
+            'nik_ayah' => ['nullable', 'string', 'max:20'],
+            'tgl_lahir_ayah' => ['nullable', 'date'],
+            'id_pddk_ayah' => ['nullable', 'integer'],
+            'id_pekerjaan_ayah' => ['nullable', 'integer'],
+            'id_penghasilan_ayah' => ['nullable', 'integer'],
+            'ibu' => ['nullable', 'string', 'max:255'],
+            'nik_ibu' => ['nullable', 'string', 'max:20'],
+            'tgl_lahir_ibu' => ['nullable', 'date'],
+            'id_pddk_ibu' => ['nullable', 'integer'],
+            'id_pekerjaan_ibu' => ['nullable', 'integer'],
+            'id_penghasilan_ibu' => ['nullable', 'integer'],
+            'wali' => ['nullable', 'string', 'max:255'],
+            'nik_wali' => ['nullable', 'string', 'max:20'],
+            'tgl_lahir_wali' => ['nullable', 'date'],
+            'id_pddk_wali' => ['nullable', 'integer'],
+            'id_pekerjaan_wali' => ['nullable', 'integer'],
+            'id_penghasilan_wali' => ['nullable', 'integer'],
         ]);
 
         $mahasiswa->update($validated);

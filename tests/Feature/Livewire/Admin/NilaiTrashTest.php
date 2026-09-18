@@ -95,6 +95,90 @@ it('does not touch a deleted nilai belonging to another mahasiswa', function () 
     expect(Nilai::find($nilai->id))->toBeNull();
 });
 
+it('bulk deletes live nilai and permanently deletes the ones already deleted', function () {
+    $mahasiswa = Mahasiswa::factory()->create();
+
+    $krsHidup = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+    $nilaiHidup = Nilai::factory()->create(['id_krs' => $krsHidup->id]);
+
+    $krsTerhapus = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+    $nilaiTerhapus = Nilai::factory()->create(['id_krs' => $krsTerhapus->id]);
+    $nilaiTerhapus->delete();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('showTrashed', true)
+        ->set('selected', [(string) $nilaiHidup->id, (string) $nilaiTerhapus->id])
+        ->call('confirmBulkDelete')
+        ->assertSet('confirmingBulkDelete', true)
+        ->call('bulkDelete')
+        ->assertSet('selected', [])
+        ->assertSet('confirmingBulkDelete', false)
+        ->assertSee('1 nilai dihapus dan 1 nilai dihapus permanen.');
+
+    expect(Nilai::find($nilaiHidup->id))->toBeNull();
+    expect(Nilai::withTrashed()->find($nilaiHidup->id)->trashed())->toBeTrue();
+    expect(Nilai::withTrashed()->find($nilaiTerhapus->id))->toBeNull();
+});
+
+it('skips a blocked row in a bulk delete instead of failing the whole batch', function () {
+    [$mahasiswa, , $nilaiDiblokir] = nilaiTerhapusUntukMahasiswa();
+    KonversiNilai::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_nilai' => $nilaiDiblokir->id]);
+
+    $krsLain = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+    $nilaiLain = Nilai::factory()->create(['id_krs' => $krsLain->id]);
+    $nilaiLain->delete();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('showTrashed', true)
+        ->set('selected', [(string) $nilaiDiblokir->id, (string) $nilaiLain->id])
+        ->call('bulkDelete')
+        ->assertSee('1 nilai dihapus permanen.')
+        ->assertSee('1 nilai tidak bisa dihapus permanen karena masih tercatat di data konversi nilai');
+
+    expect(Nilai::withTrashed()->find($nilaiDiblokir->id))->not->toBeNull();
+    expect(Nilai::withTrashed()->find($nilaiLain->id))->toBeNull();
+});
+
+it('ignores a bulk-delete selection pointing at another mahasiswa nilai', function () {
+    [, , $nilaiMahasiswaLain] = nilaiTerhapusUntukMahasiswa();
+    $mahasiswa = Mahasiswa::factory()->create();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('selected', [(string) $nilaiMahasiswaLain->id])
+        ->call('bulkDelete');
+
+    expect(Nilai::withTrashed()->find($nilaiMahasiswaLain->id))->not->toBeNull();
+});
+
+it('clears the selection when the filter changes', function () {
+    $mahasiswa = Mahasiswa::factory()->create();
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+    $nilai = Nilai::factory()->create(['id_krs' => $krs->id]);
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('selected', [(string) $nilai->id])
+        ->set('search', 'apa pun')
+        ->assertSet('selected', []);
+});
+
+it('forbids bulk delete without the delete nilai permission', function () {
+    config(['access.granular_permissions' => true]);
+
+    [$mahasiswa, , $nilai] = nilaiTerhapusUntukMahasiswa();
+
+    Livewire::actingAs(adminUser('admin_akademik'))
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('selected', [(string) $nilai->id])
+        ->call('bulkDelete')
+        ->assertForbidden();
+
+    expect(Nilai::withTrashed()->find($nilai->id))->not->toBeNull();
+});
+
 it('forbids restore and permanent delete without the delete nilai permission', function () {
     // Tanpa granular permissions, PanelAccess mengizinkan seluruh aksi untuk role Akademik.
     config(['access.granular_permissions' => true]);

@@ -117,8 +117,13 @@
             </div>
         </div>
 
-        @if (\App\Support\PanelAccess::can(auth()->user(), 'nilai', 'delete'))
-            <div class="mb-4">
+        {{-- @php(...) satu baris tidak dikompilasi lagi di Laravel 12 — harus @php ... @endphp. --}}
+        @php
+            $bisaHapus = \App\Support\PanelAccess::can(auth()->user(), 'nilai', 'delete');
+        @endphp
+
+        @if ($bisaHapus)
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <label class="inline-flex items-center gap-2 text-sm text-neutral-700">
                     <input
                         type="checkbox"
@@ -127,6 +132,17 @@
                     />
                     Tampilkan nilai yang sudah dihapus
                 </label>
+
+                @if ($selected !== [])
+                    <button
+                        type="button"
+                        wire:click="confirmBulkDelete"
+                        class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+                    >
+                        <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+                        Hapus {{ count($selected) }} nilai terpilih
+                    </button>
+                @endif
             </div>
         @endif
 
@@ -162,6 +178,18 @@
             <table class="w-full text-left text-sm">
                 <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     <tr>
+                        @if ($bisaHapus)
+                            <th class="px-4 py-3 w-10">
+                                <input
+                                    type="checkbox"
+                                    wire:click="toggleSelectAll"
+                                    @checked($this->selectableNilaiIds() !== [] && count($selected) === count($this->selectableNilaiIds()))
+                                    @disabled($this->selectableNilaiIds() === [])
+                                    class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
+                                    title="Pilih semua"
+                                />
+                            </th>
+                        @endif
                         <th class="px-4 py-3">Kode</th>
                         <th class="px-4 py-3">Mata Kuliah</th>
                         <th class="px-4 py-3 text-center">SKS</th>
@@ -189,6 +217,19 @@
                             };
                         @endphp
                         <tr wire:key="nilai-krs-{{ $krs->id }}" class="{{ $nilaiTerhapus ? 'bg-neutral-50 text-neutral-500' : '' }}">
+                            @if ($bisaHapus)
+                                <td class="px-4 py-3">
+                                    @if ($nilai || $nilaiTerhapus)
+                                        <input
+                                            type="checkbox"
+                                            value="{{ $nilai?->id ?? $nilaiTerhapus->id }}"
+                                            wire:model.live="selected"
+                                            class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
+                                            title="{{ $nilaiTerhapus ? 'Pilih untuk dihapus permanen' : 'Pilih untuk dihapus' }}"
+                                        />
+                                    @endif
+                                </td>
+                            @endif
                             <td class="px-4 py-3 font-medium text-neutral-900">{{ $matkul?->kode ?? '—' }}</td>
                             <td class="px-4 py-3 text-neutral-900">{{ $matkul?->nama ?? '—' }}</td>
                             <td class="px-4 py-3 text-center text-neutral-600">{{ $matkul?->sks ?? '—' }}</td>
@@ -259,7 +300,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-10 text-center text-neutral-500">Belum ada data.</td>
+                            <td colspan="{{ $bisaHapus ? 7 : 6 }}" class="px-4 py-10 text-center text-neutral-500">Belum ada data.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -278,6 +319,40 @@
                     </button>
                     <button type="button" wire:click="delete" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700">
                         Hapus
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if ($confirmingBulkDelete)
+        @php
+            $ringkasan = $this->ringkasanTerpilih;
+        @endphp
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 px-4">
+            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-border-lg">
+                <h3 class="text-base font-semibold text-neutral-900">Hapus {{ $ringkasan['hapus'] + $ringkasan['permanen'] }} nilai terpilih?</h3>
+                <div class="mt-3 space-y-2 text-sm text-neutral-600">
+                    @if ($ringkasan['hapus'] > 0)
+                        <p>
+                            <span class="font-medium text-neutral-900">{{ $ringkasan['hapus'] }} nilai</span> akan dihapus
+                            beserta komponen dan revisinya, dan masih bisa dipulihkan.
+                        </p>
+                    @endif
+                    @if ($ringkasan['permanen'] > 0)
+                        <p class="rounded-lg bg-rose-50 px-3 py-2 text-rose-800">
+                            <span class="font-medium">{{ $ringkasan['permanen'] }} nilai</span> sudah dihapus sebelumnya,
+                            jadi akan dihapus <span class="font-medium">permanen</span> dari database dan tidak bisa
+                            dipulihkan lagi.
+                        </p>
+                    @endif
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" wire:click="cancelBulkDelete" class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
+                        Batal
+                    </button>
+                    <button type="button" wire:click="bulkDelete" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700">
+                        Hapus {{ $ringkasan['hapus'] + $ringkasan['permanen'] }} Nilai
                     </button>
                 </div>
             </div>

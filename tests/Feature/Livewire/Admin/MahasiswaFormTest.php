@@ -92,3 +92,24 @@ it('redirects unauthenticated users to the admin login page', function () {
     $this->get(route('admin.administrasi.mahasiswa.edit', $mahasiswa->id))
         ->assertRedirect(route('login'));
 });
+
+it('saves the nama ayah and nama ibu typed into the form', function () {
+    // Regresi: 'ayah'/'ibu' tidak punya aturan validasi, sehingga validate() tidak pernah
+    // mengembalikannya dan nama yang diketik admin hilang diam-diam saat simpan ('wali' lolos
+    // karena aturannya ada).
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create();
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $mahasiswa->id])
+        ->set('ayah', 'Bapak Admin')
+        ->set('ibu', 'Ibu Admin')
+        ->set('wali', 'Wali Admin')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $mahasiswa->refresh();
+    expect($mahasiswa->ayah)->toBe('Bapak Admin');
+    expect($mahasiswa->ibu)->toBe('Ibu Admin');
+    expect($mahasiswa->wali)->toBe('Wali Admin');
+});

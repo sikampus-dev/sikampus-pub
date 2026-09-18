@@ -10,6 +10,7 @@ use App\Models\Semester;
 use App\Services\SemesterService;
 use App\Services\UrutanMatkulService;
 use App\Support\PanelAccess;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
@@ -34,6 +35,16 @@ class Show extends Component
 
     public ?int $confirmForceDeleteId = null;
 
+    /**
+     * Id nilai yang dicentang untuk hapus massal — nilai hidup maupun nilai yang sudah terhapus,
+     * karena aksinya memang berbeda per baris (lihat bulkDelete()).
+     *
+     * @var array<int, string>
+     */
+    public array $selected = [];
+
+    public bool $confirmingBulkDelete = false;
+
     // Tabel yang constrained('nilai')->restrictOnDelete() — restrict itu berlaku di level baris DB
     // apa adanya, termasuk baris yang di tabel itu sendiri sudah soft-deleted, jadi dicek lewat
     // DB::table mentah di forceDeleteNilai(). Sama seperti FORCE_DELETE_BLOCKERS di Kelas\Index.
@@ -57,13 +68,17 @@ class Show extends Component
         }
     }
 
+    // Centang dibuang setiap kali daftarnya berubah: baris yang tidak lagi terlihat tetap ikut
+    // terhapus kalau centangnya dibiarkan, dan tidak ada yang sadar sampai datanya hilang.
     public function updatingSearch(): void
     {
+        $this->selected = [];
         unset($this->krsList, $this->statistik, $this->semesterDitempuh);
     }
 
     public function updatingFilterSemester(): void
     {
+        $this->selected = [];
         unset($this->krsList, $this->statistik, $this->semesterDitempuh);
     }
 
@@ -155,7 +170,36 @@ class Show extends Component
     {
         abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk melihat nilai yang dihapus.');
 
+        // Mematikan toggle menyembunyikan baris terhapus; centangnya tidak boleh ikut tersembunyi.
+        $this->selected = [];
         unset($this->trashedNilaiMap);
+    }
+
+    /**
+     * Id nilai pada baris yang sedang tampil — dipakai tombol "pilih semua" di kepala tabel.
+     *
+     * @return array<int, string>
+     */
+    #[Computed]
+    public function selectableNilaiIds(): array
+    {
+        $ids = [];
+
+        foreach ($this->krsList as $krs) {
+            $nilai = $krs->nilai ?? $this->trashedNilaiMap->get($krs->id);
+            if ($nilai) {
+                $ids[] = (string) $nilai->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    public function toggleSelectAll(): void
+    {
+        $semua = $this->selectableNilaiIds();
+
+        $this->selected = count($this->selected) === count($semua) ? [] : $semua;
     }
 
     /**
@@ -244,14 +288,7 @@ class Show extends Component
 
         $deletedBy = $user ? ($user->name ?? (string) ($user->email ?? $user->id)) : 'system';
 
-        // Komponen dan revisi ikut terhapus lewat AturanHapusBerantai (Nilai::$hapusBerantai),
-        // dengan deleted_at yang sama sehingga bisa dipulihkan utuh. Dulu dihapus manual lewat
-        // DB::table dan query builder, yang memberi cap waktu berbeda dan melewati event model.
-        DB::transaction(function () use ($nilai, $deletedBy): void {
-            $nilai->deleted_by = $deletedBy;
-            $nilai->save();
-            $nilai->delete();
-        });
+        DB::transaction(fn () => $this->softDeleteSatu($nilai, $deletedBy));
 
         $this->confirmDeleteId = null;
         unset($this->krsList, $this->statistik);
@@ -312,12 +349,7 @@ class Show extends Component
 
         $nilai = $this->findTrashedNilaiMilikMahasiswa($this->confirmForceDeleteId);
 
-        $blockers = [];
-        foreach (self::FORCE_DELETE_BLOCKERS as $table => $meta) {
-            if (DB::table($table)->where($meta['column'], $nilai->id)->exists()) {
-                $blockers[] = $meta['label'];
-            }
-        }
+        $blockers = $this->blockersUntuk($nilai);
 
         if ($blockers !== []) {
             session()->flash('error', 'Tidak bisa menghapus permanen nilai ini: masih tercatat di data '.implode(', ', $blockers).'. Hapus atau pindahkan data itu terlebih dahulu.');
@@ -326,25 +358,180 @@ class Show extends Component
             return;
         }
 
-        DB::transaction(function () use ($nilai): void {
-            $waktuHapus = $nilai->getRawOriginal('deleted_at');
-
-            foreach (['nilaiKomponen', 'nilaiRevisi'] as $relasi) {
-                $query = $nilai->{$relasi}();
-                $query->onlyTrashed()
-                    ->where($query->getRelated()->getQualifiedDeletedAtColumn(), $waktuHapus)
-                    ->get()
-                    ->each
-                    ->forceDelete();
-            }
-
-            $nilai->forceDelete();
-        });
+        DB::transaction(fn () => $this->hapusPermanenSatu($nilai));
 
         $this->confirmForceDeleteId = null;
         unset($this->krsList, $this->statistik, $this->trashedNilaiMap);
 
         session()->flash('status', 'Nilai berhasil dihapus permanen.');
+    }
+
+    /**
+     * Hapus massal. Nilai yang masih hidup di-soft-delete (bisa dipulihkan), nilai yang SUDAH
+     * terhapus dihapus permanen — jadi satu tombol bisa berarti dua tindakan dengan akibat yang
+     * jauh berbeda. Karena itu modal konfirmasinya menyebut jumlah masing-masing lebih dulu, dan
+     * hasilnya dilaporkan terpisah.
+     *
+     * Baris yang diblokir konversi nilai dilewati, bukan menggagalkan seluruh aksi: satu baris
+     * bermasalah tidak boleh membatalkan puluhan baris lain yang sudah benar.
+     */
+    public function bulkDelete(): void
+    {
+        abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk menghapus nilai.');
+
+        $terpilih = $this->nilaiTerpilih();
+
+        if ($terpilih->isEmpty()) {
+            $this->confirmingBulkDelete = false;
+
+            return;
+        }
+
+        $user = Auth::user();
+        $deletedBy = $user ? ($user->name ?? (string) ($user->email ?? $user->id)) : 'system';
+
+        $dihapus = 0;
+        $dihapusPermanen = 0;
+        $diblokir = [];
+
+        DB::transaction(function () use ($terpilih, $deletedBy, &$dihapus, &$dihapusPermanen, &$diblokir): void {
+            foreach ($terpilih as $nilai) {
+                if (! $nilai->trashed()) {
+                    $this->softDeleteSatu($nilai, $deletedBy);
+                    $dihapus++;
+
+                    continue;
+                }
+
+                if ($this->blockersUntuk($nilai) !== []) {
+                    $diblokir[] = $nilai->krs?->kelas?->kurikulumMatkul?->matkul?->kode ?? "ID {$nilai->id}";
+
+                    continue;
+                }
+
+                $this->hapusPermanenSatu($nilai);
+                $dihapusPermanen++;
+            }
+        });
+
+        $this->selected = [];
+        $this->confirmingBulkDelete = false;
+        unset($this->krsList, $this->statistik, $this->trashedNilaiMap);
+
+        $pesan = [];
+        if ($dihapus > 0) {
+            $pesan[] = "{$dihapus} nilai dihapus";
+        }
+        if ($dihapusPermanen > 0) {
+            $pesan[] = "{$dihapusPermanen} nilai dihapus permanen";
+        }
+
+        if ($pesan !== []) {
+            session()->flash('status', implode(' dan ', $pesan).'.');
+        }
+
+        if ($diblokir !== []) {
+            session()->flash('error', count($diblokir).' nilai tidak bisa dihapus permanen karena masih tercatat di data konversi nilai: '.implode(', ', $diblokir).'.');
+        }
+    }
+
+    public function confirmBulkDelete(): void
+    {
+        abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk menghapus nilai.');
+
+        if ($this->selected === []) {
+            return;
+        }
+
+        $this->confirmingBulkDelete = true;
+    }
+
+    public function cancelBulkDelete(): void
+    {
+        $this->confirmingBulkDelete = false;
+    }
+
+    /**
+     * Ringkasan untuk modal konfirmasi: berapa yang akan di-soft-delete dan berapa yang akan
+     * lenyap permanen. Dihitung ulang dari database, bukan dari apa yang sedang tampil di layar.
+     *
+     * @return array{hapus: int, permanen: int}
+     */
+    #[Computed]
+    public function ringkasanTerpilih(): array
+    {
+        $terpilih = $this->nilaiTerpilih();
+
+        return [
+            'hapus' => $terpilih->reject->trashed()->count(),
+            'permanen' => $terpilih->filter->trashed()->count(),
+        ];
+    }
+
+    /**
+     * Nilai terpilih yang benar-benar milik mahasiswa halaman ini. Id milik mahasiswa lain yang
+     * diselipkan lewat request palsu disaring diam-diam di sini — sama seperti penjagaan
+     * findTrashedNilaiMilikMahasiswa() untuk aksi satuan, tapi tanpa menggagalkan seluruh batch.
+     *
+     * @return Collection<int, Nilai>
+     */
+    private function nilaiTerpilih()
+    {
+        $ids = array_filter(array_map('intval', $this->selected));
+
+        if ($ids === []) {
+            return collect();
+        }
+
+        return Nilai::withTrashed()
+            ->with(['krs.kelas.kurikulumMatkul.matkul'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->filter(fn (Nilai $nilai) => $nilai->krs && (int) $nilai->krs->id_mahasiswa === $this->mahasiswaId)
+            ->values();
+    }
+
+    /**
+     * Komponen dan revisi ikut terhapus lewat AturanHapusBerantai (Nilai::$hapusBerantai), dengan
+     * deleted_at yang sama sehingga bisa dipulihkan utuh. Dulu dihapus manual lewat DB::table dan
+     * query builder, yang memberi cap waktu berbeda dan melewati event model.
+     */
+    private function softDeleteSatu(Nilai $nilai, string $deletedBy): void
+    {
+        $nilai->deleted_by = $deletedBy;
+        $nilai->save();
+        $nilai->delete();
+    }
+
+    private function hapusPermanenSatu(Nilai $nilai): void
+    {
+        $waktuHapus = $nilai->getRawOriginal('deleted_at');
+
+        foreach (['nilaiKomponen', 'nilaiRevisi'] as $relasi) {
+            $query = $nilai->{$relasi}();
+            $query->onlyTrashed()
+                ->where($query->getRelated()->getQualifiedDeletedAtColumn(), $waktuHapus)
+                ->get()
+                ->each
+                ->forceDelete();
+        }
+
+        $nilai->forceDelete();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function blockersUntuk(Nilai $nilai): array
+    {
+        $blockers = [];
+        foreach (self::FORCE_DELETE_BLOCKERS as $table => $meta) {
+            if (DB::table($table)->where($meta['column'], $nilai->id)->exists()) {
+                $blockers[] = $meta['label'];
+            }
+        }
+
+        return $blockers;
     }
 
     /**

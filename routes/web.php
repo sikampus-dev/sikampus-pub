@@ -195,6 +195,8 @@ use App\Livewire\Dosen\UjianSidang\Index as DosenUjianSidangIndex;
 use App\Livewire\Dosen\UjianSidang\Show as DosenUjianSidangShow;
 use App\Livewire\Mahasiswa\BimbinganTugasAkhir\Index as MahasiswaBimbinganTugasAkhirIndex;
 use App\Livewire\Mahasiswa\BimbinganTugasAkhir\Show as MahasiswaBimbinganTugasAkhirShow;
+use App\Livewire\Mahasiswa\Biodata\Form as MahasiswaBiodataForm;
+use App\Livewire\Mahasiswa\Biodata\Index as MahasiswaBiodataIndex;
 use App\Livewire\Mahasiswa\Dashboard as MahasiswaDashboard;
 use App\Livewire\Mahasiswa\Jadwal\Detail as MahasiswaJadwalDetail;
 use App\Livewire\Mahasiswa\Jadwal\Index as MahasiswaJadwalIndex;
@@ -364,6 +366,11 @@ Route::middleware(['auth', 'role.admin.prodi.web'])->group(function (): void {
 Route::middleware(['auth', 'role.mahasiswa.web'])->group(function (): void {
     Route::livewire('/mahasiswa/dashboard', MahasiswaDashboard::class)->name('mahasiswa.dashboard');
     Route::livewire('/mahasiswa/profil', MahasiswaProfil::class)->name('mahasiswa.profil');
+
+    // Menu "Akun" di sidebar: Profil (akun & password) + Biodata (data diri lengkap).
+    // Rute literal ('/mahasiswa/biodata/edit') harus di atas rute yang lebih pendek.
+    Route::livewire('/mahasiswa/biodata/edit', MahasiswaBiodataForm::class)->name('mahasiswa.biodata.edit');
+    Route::livewire('/mahasiswa/biodata', MahasiswaBiodataIndex::class)->name('mahasiswa.biodata');
 
     // Rute literal ('/mahasiswa/jadwal') harus di atas rute berparameter ('{id}').
     Route::livewire('/mahasiswa/jadwal', MahasiswaJadwalIndex::class)->name('mahasiswa.jadwal');
