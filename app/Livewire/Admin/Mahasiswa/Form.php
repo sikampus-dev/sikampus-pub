@@ -244,11 +244,15 @@ class Form extends Component
             'kelurahan' => ['nullable', 'string', 'max:100'],
             'penerima_kps' => ['nullable', 'string', 'max:10'],
             'no_kps' => ['nullable', 'string', 'max:50'],
+            // 'ayah'/'ibu' sempat tidak punya aturan padahal inputnya ada di form — tanpa aturan,
+            // validate() tidak mengembalikannya dan nama yang diketik admin hilang saat simpan.
+            'ayah' => ['nullable', 'string', 'max:255'],
             'nik_ayah' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ayah' => ['nullable', 'date'],
             'id_pddk_ayah' => ['nullable', 'integer'],
             'id_pekerjaan_ayah' => ['nullable', 'integer'],
             'id_penghasilan_ayah' => ['nullable', 'integer'],
+            'ibu' => ['nullable', 'string', 'max:255'],
             'nik_ibu' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ibu' => ['nullable', 'date'],
             'id_pddk_ibu' => ['nullable', 'integer'],
@@ -283,8 +287,8 @@ class Form extends Component
             'nim', 'email', 'no_wa', 'handphone', 'alamat', 'kode_pos', 'id_kecamatan', 'id_kota',
             'id_provinsi', 'id_negara', 'jenis_kelamin', 'id_tempat_lahir', 'tanggal_lahir', 'no_ktp',
             'sekolah_asal', 'nis', 'nisn', 'npwp', 'mulai_semester', 'rt', 'rw', 'dusun', 'kelurahan',
-            'penerima_kps', 'no_kps', 'nik_ayah', 'tgl_lahir_ayah', 'nik_ibu', 'tgl_lahir_ibu', 'wali',
-            'nik_wali', 'tgl_lahir_wali',
+            'penerima_kps', 'no_kps', 'ayah', 'nik_ayah', 'tgl_lahir_ayah', 'ibu', 'nik_ibu',
+            'tgl_lahir_ibu', 'wali', 'nik_wali', 'tgl_lahir_wali',
         ] as $field) {
             if (($validated[$field] ?? null) === '') {
                 $validated[$field] = null;

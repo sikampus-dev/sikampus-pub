@@ -518,8 +518,10 @@ class MahasiswaController extends Controller
             'rw' => ['nullable', 'string', 'max:10'],
             'dusun' => ['nullable', 'string', 'max:100'],
             'kelurahan' => ['nullable', 'string', 'max:100'],
-            // Data orang tua/wali — aturannya disalin dari update() supaya jalur self-service dan
-            // jalur admin memvalidasi kolom yang sama dengan cara yang sama.
+            // Sekolah asal & data orang tua/wali — aturannya disalin dari update() supaya jalur
+            // self-service dan jalur admin memvalidasi kolom yang sama dengan cara yang sama.
+            'sekolah_asal' => ['nullable', 'string', 'max:255'],
+            'nis' => ['nullable', 'string', 'max:50'],
             'ayah' => ['nullable', 'string', 'max:255'],
             'nik_ayah' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ayah' => ['nullable', 'date'],

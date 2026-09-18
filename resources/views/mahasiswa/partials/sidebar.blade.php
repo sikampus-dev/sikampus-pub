@@ -31,7 +31,10 @@
         ]],
         ['route' => 'mahasiswa.survey', 'label' => 'Survey', 'icon' => 'clipboard-list'],
         ['route' => 'mahasiswa.ktm', 'label' => 'KTM', 'icon' => 'id-card'],
-        ['route' => 'mahasiswa.profil', 'label' => 'Profil', 'icon' => 'user'],
+        ['label' => 'Akun', 'icon' => 'user', 'children' => [
+            ['route' => 'mahasiswa.profil', 'label' => 'Profil'],
+            ['route' => 'mahasiswa.biodata', 'label' => 'Biodata'],
+        ]],
     ];
 
     $isChildActive = fn (array $child) => request()->routeIs($child['route'].'*');
