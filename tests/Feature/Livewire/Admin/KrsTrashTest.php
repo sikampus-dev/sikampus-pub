@@ -253,3 +253,18 @@ it('targets the per-row delete button at that row only', function () {
         ->test(Show::class, ['id' => $mahasiswa->id])
         ->assertSee('wire:target="confirmDelete('.$krs->id.')"', escape: false);
 });
+
+it('leaks no blade comment text into the rendered page', function () {
+    [$mahasiswa, , $krs] = krsTerhapusUntukMahasiswa();
+
+    // Komentar Blade yang tertulis {-- ... --} (bukan {{-- ... --}}) lolos sebagai teks biasa dan
+    // muncul di layar pengguna — pernah terjadi di ketiga modal konfirmasi halaman ini.
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('showTrashed', true)
+        ->set('selected', [(string) $krs->id])
+        ->call('confirmBulkDelete')
+        ->assertDontSee('--}')
+        ->call('confirmForceDelete', $krs->id)
+        ->assertDontSee('--}');
+});

@@ -298,9 +298,9 @@
                     >
                         Batal
                     </button>
-                    {-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
+                    {{-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
                          yang menghapus nilai/komponen/revisi satu per satu). Tanpa indikator,
-                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}
+                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}}
                     <button
                         type="button"
                         wire:click="delete"
@@ -334,9 +334,9 @@
                     >
                         Batal
                     </button>
-                    {-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
+                    {{-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
                          yang menghapus nilai/komponen/revisi satu per satu). Tanpa indikator,
-                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}
+                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}}
                     <button
                         type="button"
                         wire:click="forceDeleteKrs"
@@ -388,9 +388,9 @@
                     >
                         Batal
                     </button>
-                    {-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
+                    {{-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
                          yang menghapus nilai/komponen/revisi satu per satu). Tanpa indikator,
-                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}
+                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}}
                     <button
                         type="button"
                         wire:click="bulkDelete"
