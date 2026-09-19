@@ -209,3 +209,17 @@ it('binds the bulk-delete checkboxes without .live so ticking costs no request',
         ->assertSee('wire:model="selected"', escape: false)
         ->assertDontSee('wire:model.live="selected"', escape: false);
 });
+
+it('shows a loading state on the delete button inside the confirmation modals', function () {
+    [$mahasiswa, , $nilai] = nilaiTerhapusUntukMahasiswa();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('showTrashed', true)
+        ->set('selected', [(string) $nilai->id])
+        ->call('confirmBulkDelete')
+        ->assertSee('wire:loading wire:target="bulkDelete"', escape: false)
+        ->assertSee('Menghapus...')
+        ->call('confirmForceDelete', $nilai->id)
+        ->assertSee('wire:loading wire:target="forceDeleteNilai"', escape: false);
+});

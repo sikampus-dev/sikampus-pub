@@ -148,7 +148,12 @@
                     >
                         <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
                         Hapus nilai terpilih<span x-text="$wire.selected.length ? ' (' + $wire.selected.length + ')' : ''"></span>
-                        <i data-lucide="loader-2" class="h-4 w-4 animate-spin" wire:loading wire:target="confirmBulkDelete" aria-hidden="true"></i>
+                        {{-- wire:loading dipasang di <span>, bukan langsung di <i data-lucide>: lucide
+                             MENGGANTI elemen <i> itu dengan <svg> saat ikon dirender, jadi atribut yang
+                             menempel padanya tidak bisa diandalkan. --}}
+                        <span wire:loading wire:target="confirmBulkDelete">
+                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                        </span>
                     </button>
                 @endif
             </div>
@@ -328,11 +333,30 @@
                 <h3 class="text-base font-semibold text-neutral-900">Hapus nilai?</h3>
                 <p class="mt-2 text-sm text-neutral-600">Data komponen dan revisi terkait ikut dihapus. Tindakan ini tidak dapat dibatalkan.</p>
                 <div class="mt-6 flex justify-end gap-2">
-                    <button type="button" wire:click="cancelDelete" class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
+                    <button
+                        type="button"
+                        wire:click="cancelDelete"
+                        wire:loading.attr="disabled"
+                        wire:target="delete"
+                        class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border disabled:opacity-50"
+                    >
                         Batal
                     </button>
-                    <button type="button" wire:click="delete" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700">
-                        Hapus
+                    {-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
+                         yang menghapus nilai/komponen/revisi satu per satu). Tanpa indikator,
+                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}
+                    <button
+                        type="button"
+                        wire:click="delete"
+                        wire:loading.attr="disabled"
+                        wire:target="delete"
+                        class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-75"
+                    >
+                        <span wire:loading.remove wire:target="delete">Hapus</span>
+                        <span wire:loading wire:target="delete" class="inline-flex items-center gap-2">
+                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                            Menghapus...
+                        </span>
                     </button>
                 </div>
             </div>
@@ -362,11 +386,30 @@
                     @endif
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
-                    <button type="button" wire:click="cancelBulkDelete" class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
+                    <button
+                        type="button"
+                        wire:click="cancelBulkDelete"
+                        wire:loading.attr="disabled"
+                        wire:target="bulkDelete"
+                        class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border disabled:opacity-50"
+                    >
                         Batal
                     </button>
-                    <button type="button" wire:click="bulkDelete" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700">
-                        Hapus {{ $ringkasan['hapus'] + $ringkasan['permanen'] }} Nilai
+                    {-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
+                         yang menghapus nilai/komponen/revisi satu per satu). Tanpa indikator,
+                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}
+                    <button
+                        type="button"
+                        wire:click="bulkDelete"
+                        wire:loading.attr="disabled"
+                        wire:target="bulkDelete"
+                        class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-75"
+                    >
+                        <span wire:loading.remove wire:target="bulkDelete">Hapus {{ $ringkasan['hapus'] + $ringkasan['permanen'] }} Nilai</span>
+                        <span wire:loading wire:target="bulkDelete" class="inline-flex items-center gap-2">
+                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                            Menghapus...
+                        </span>
                     </button>
                 </div>
             </div>
@@ -379,11 +422,30 @@
                 <h3 class="text-base font-semibold text-neutral-900">Hapus permanen nilai?</h3>
                 <p class="mt-2 text-sm text-neutral-600">Nilai beserta komponen dan revisi yang terhapus bersamanya akan benar-benar dihapus dari database dan tidak bisa dipulihkan lagi — berbeda dari hapus biasa. Tindakan ini tidak dapat dibatalkan.</p>
                 <div class="mt-6 flex justify-end gap-2">
-                    <button type="button" wire:click="cancelForceDelete" class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
+                    <button
+                        type="button"
+                        wire:click="cancelForceDelete"
+                        wire:loading.attr="disabled"
+                        wire:target="forceDeleteNilai"
+                        class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border disabled:opacity-50"
+                    >
                         Batal
                     </button>
-                    <button type="button" wire:click="forceDeleteNilai" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700">
-                        Hapus Permanen
+                    {-- Penghapusan bisa memakan beberapa detik (koneksi lambat, atau batch besar
+                         yang menghapus nilai/komponen/revisi satu per satu). Tanpa indikator,
+                         tombolnya tampak tidak bereaksi dan gampang diklik dua kali. --}
+                    <button
+                        type="button"
+                        wire:click="forceDeleteNilai"
+                        wire:loading.attr="disabled"
+                        wire:target="forceDeleteNilai"
+                        class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-75"
+                    >
+                        <span wire:loading.remove wire:target="forceDeleteNilai">Hapus Permanen</span>
+                        <span wire:loading wire:target="forceDeleteNilai" class="inline-flex items-center gap-2">
+                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                            Menghapus...
+                        </span>
                     </button>
                 </div>
             </div>
