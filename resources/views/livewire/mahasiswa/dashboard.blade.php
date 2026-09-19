@@ -219,12 +219,7 @@
                             $truncated = strlen($item->isi) > 50 ? substr($item->isi, 0, 50).'...' : $item->isi;
                             $badge = $prioritasBadge[$item->prioritas] ?? ['label' => 'Umum', 'class' => 'border-neutral-200 bg-neutral-100 text-neutral-700'];
                         @endphp
-                        <button
-                            type="button"
-                            wire:click="showPengumuman({{ $item->id }})"
-                            onclick="document.getElementById('pengumuman-modal').showModal()"
-                            class="block w-full rounded-xl border border-neutral-200 p-4 text-left transition hover:shadow-border"
-                        >
+                        <div wire:key="pengumuman-{{ $item->id }}" class="rounded-xl border border-neutral-200 p-4">
                             <div class="mb-2 flex items-start justify-between gap-3">
                                 <h4 class="flex-1 text-sm font-semibold text-neutral-900">{{ $item->judul }}</h4>
                                 @if ($item->prioritas)
@@ -235,17 +230,35 @@
                             @if ($item->tanggal_selesai)
                                 <p class="text-xs text-neutral-500">Berlaku hingga: {{ $item->tanggal_selesai->translatedFormat('d F Y') }}</p>
                             @endif
-                        </button>
+                            <button
+                                type="button"
+                                wire:click="showPengumuman({{ $item->id }})"
+                                class="mt-3 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-sky-700 shadow-border transition hover:bg-sky-50"
+                            >
+                                <i data-lucide="eye" class="h-4 w-4" aria-hidden="true"></i>
+                                Lihat detail
+                            </button>
+                        </div>
                     @endforeach
                 </div>
             @endif
         </div>
     </div>
 
-    {{-- Modal detail pengumuman --}}
-    <dialog id="pengumuman-modal" class="fixed top-1/2 left-1/2 m-0 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl p-0 shadow-border-lg backdrop:bg-neutral-900/40">
-        @if ($selected)
-            <div class="flex max-h-[90vh] flex-col">
+    {{-- Modal detail pengumuman.
+
+         Dulu ini memakai <dialog> native yang dibuka lewat onclick="...showModal()" sementara
+         isinya diisi state Livewire. Dua sumber kebenaran itu yang membuat modal "muncul sedetik
+         lalu tertutup": showModal() membuka dialog seketika, lalu begitu respons Livewire tiba,
+         morph mengganti elemen <dialog> (isinya berubah dari kosong jadi terisi) dan status modal
+         native ikut hilang. Sekarang buka/tutupnya murni dari $selectedPengumumanId — satu sumber
+         kebenaran, tanpa JS, sama seperti modal di Perwalian & Keringanan Biaya. --}}
+    @if ($selected)
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4"
+            wire:click.self="closePengumuman"
+        >
+            <div class="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-border-lg">
                 <div class="flex items-start justify-between gap-4 border-b border-neutral-200 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div class="mb-2 flex items-center gap-3">
@@ -267,7 +280,6 @@
                     <button
                         type="button"
                         wire:click="closePengumuman"
-                        onclick="document.getElementById('pengumuman-modal').close()"
                         class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
                     >
                         <i data-lucide="x" class="h-5 w-5" aria-hidden="true"></i>
@@ -280,13 +292,12 @@
                     <button
                         type="button"
                         wire:click="closePengumuman"
-                        onclick="document.getElementById('pengumuman-modal').close()"
                         class="w-full rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
                     >
                         Tutup
                     </button>
                 </div>
             </div>
-        @endif
-    </dialog>
+        </div>
+    @endif
 </div>

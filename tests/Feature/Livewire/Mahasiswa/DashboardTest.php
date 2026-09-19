@@ -75,11 +75,14 @@ it('computes ip per semester only from approved krs with final grades', function
         ->assertSee('20241');
 });
 
-it('lists active pengumuman aimed at mahasiswa and lets the mahasiswa open the detail modal', function () {
+it('lists active pengumuman aimed at mahasiswa and opens the detail modal from the lihat button', function () {
     [$user] = dashboardMahasiswaUser();
+    // Isi sengaja > 50 karakter: daftar hanya menampilkan potongannya, jadi teks penuh di bawah
+    // benar-benar membuktikan modalnya terbuka, bukan sekadar terbaca dari kartu daftar.
+    $isiPenuh = 'Isi lengkap pengumuman uji yang panjangnya lebih dari lima puluh karakter.';
     $pengumuman = Pengumuman::factory()->create([
         'judul' => 'Pengumuman Uji',
-        'isi' => 'Isi lengkap pengumuman uji.',
+        'isi' => $isiPenuh,
         'audien' => 'mahasiswa',
         'prioritas' => 'high',
         'tanggal_mulai' => now()->subDay(),
@@ -90,9 +93,39 @@ it('lists active pengumuman aimed at mahasiswa and lets the mahasiswa open the d
     Livewire::actingAs($user)
         ->test(Dashboard::class)
         ->assertSee('Pengumuman Uji')
+        ->assertSee('Lihat detail')
+        ->assertDontSee($isiPenuh)
         ->call('showPengumuman', $pengumuman->id)
         ->assertSet('selectedPengumumanId', $pengumuman->id)
-        ->assertSee('Isi lengkap pengumuman uji.');
+        ->assertSee($isiPenuh);
+});
+
+it('keeps the pengumuman modal open across re-renders and closes it only when asked', function () {
+    // Regresi: modal dulu dibuka lewat <dialog>.showModal() dari onclick sementara isinya diisi
+    // state Livewire. Render ulang berikutnya mengganti elemen <dialog> dan status modal native
+    // hilang, jadi modal tertutup sendiri sedetik setelah dibuka. Sekarang statusnya hanya
+    // ditentukan selectedPengumumanId, jadi render ulang tidak boleh menutupnya.
+    [$user] = dashboardMahasiswaUser();
+    $isiPenuh = 'Isi pengumuman yang harus tetap terlihat setelah komponen dirender ulang berkali-kali.';
+    $pengumuman = Pengumuman::factory()->create([
+        'judul' => 'Pengumuman Tetap',
+        'isi' => $isiPenuh,
+        'audien' => 'mahasiswa',
+        'tanggal_mulai' => now()->subDay(),
+        'tanggal_selesai' => now()->addDay(),
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Dashboard::class)
+        ->call('showPengumuman', $pengumuman->id)
+        ->assertSee($isiPenuh)
+        // Render ulang tanpa menyentuh modal — dulu inilah yang menutupnya sendiri.
+        ->call('$refresh')
+        ->assertSet('selectedPengumumanId', $pengumuman->id)
+        ->assertSee($isiPenuh)
+        ->call('closePengumuman')
+        ->assertSet('selectedPengumumanId', null)
+        ->assertDontSee($isiPenuh);
 });
 
 it('shows a ktm preview with a manage link when the mahasiswa already has one', function () {
