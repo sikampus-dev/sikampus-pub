@@ -440,6 +440,10 @@ class Show extends Component
         abort_unless(PanelAccess::can(Auth::user(), 'nilai', 'delete'), 403, 'Anda tidak memiliki hak untuk menghapus nilai.');
 
         if ($this->selected === []) {
+            // Tombolnya sengaja tetap bisa diklik tanpa Alpine (lihat Blade), jadi keadaan ini
+            // harus dijawab dengan pesan — bukan diam saja seolah kliknya tidak terdaftar.
+            session()->flash('error', 'Belum ada nilai yang dicentang.');
+
             return;
         }
 

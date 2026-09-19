@@ -363,6 +363,10 @@ class Show extends Component
     public function confirmBulkDelete(): void
     {
         if ($this->selected === []) {
+            // Tombolnya sengaja tetap bisa diklik tanpa Alpine (lihat Blade), jadi keadaan ini
+            // harus dijawab dengan pesan — bukan diam saja seolah kliknya tidak terdaftar.
+            session()->flash('error', 'Belum ada KRS yang dicentang.');
+
             return;
         }
 

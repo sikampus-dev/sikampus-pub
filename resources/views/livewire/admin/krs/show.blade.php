@@ -122,14 +122,19 @@
                 Tampilkan KRS yang sudah dihapus
             </label>
 
-            @if ($selected !== [])
+            {{-- Selalu dirender, tidak disembunyikan dengan @if ($selected) — lihat catatan di
+                 kolom checkbox soal wire:model yang ditunda. --}}
+            @if ($this->krsList->isNotEmpty())
                 <button
                     type="button"
                     wire:click="confirmBulkDelete"
-                    class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+                    class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-50"
+                    x-bind:disabled="!$wire.selected.length"
+                    wire:loading.attr="disabled"
                 >
                     <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
-                    Hapus {{ count($selected) }} KRS terpilih
+                    Hapus KRS terpilih<span x-text="$wire.selected.length ? ' (' + $wire.selected.length + ')' : ''"></span>
+                    <i data-lucide="loader-2" class="h-4 w-4 animate-spin" wire:loading wire:target="confirmBulkDelete" aria-hidden="true"></i>
                 </button>
             @endif
         </div>
@@ -165,10 +170,15 @@
                         @endphp
                         <tr wire:key="krs-{{ $krs->id }}" class="{{ $krs->trashed() ? 'bg-neutral-50 text-neutral-500' : '' }}">
                             <td class="print:hidden px-4 py-3">
+                                {{-- wire:model TANPA .live: mencentang tidak boleh memicu request.
+                                     Dengan .live, tiap klik mengirim satu request penuh (render
+                                     ulang seluruh halaman), sehingga centang baru terlihat setelah
+                                     bolak-balik jaringan — terasa macet di server yang jauh.
+                                     Nilainya ikut terkirim saat tombol hapus diklik. --}}
                                 <input
                                     type="checkbox"
                                     value="{{ $krs->id }}"
-                                    wire:model.live="selected"
+                                    wire:model="selected"
                                     class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
                                     title="{{ $krs->trashed() ? 'Pilih untuk dihapus permanen' : 'Pilih untuk dihapus' }}"
                                 />

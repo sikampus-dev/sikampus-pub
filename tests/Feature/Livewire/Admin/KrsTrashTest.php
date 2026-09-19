@@ -209,3 +209,13 @@ it('does not touch a deleted krs belonging to another mahasiswa', function () {
 
     expect(Krs::find($krs->id))->toBeNull();
 });
+
+it('binds the bulk-delete checkboxes without .live so ticking costs no request', function () {
+    [$mahasiswa] = krsTerhapusUntukMahasiswa();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('showTrashed', true)
+        ->assertSee('wire:model="selected"', escape: false)
+        ->assertDontSee('wire:model.live="selected"', escape: false);
+});

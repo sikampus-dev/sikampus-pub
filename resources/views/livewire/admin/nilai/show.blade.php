@@ -133,14 +133,22 @@
                     Tampilkan nilai yang sudah dihapus
                 </label>
 
-                @if ($selected !== [])
+                {{-- Tombol ini SELALU dirender, tidak disembunyikan dengan @if ($selected): centang
+                     memakai wire:model yang ditunda (lihat catatan di kolom checkbox), jadi jumlah
+                     terpilih di sisi server baru diketahui pada request berikutnya. Jumlahnya
+                     ditampilkan Alpine sebagai peningkatan saja — kalau Alpine tidak jalan,
+                     tombolnya tetap berfungsi dan bulkDelete() yang kosong dijawab dengan pesan. --}}
+                @if ($this->selectableNilaiIds() !== [])
                     <button
                         type="button"
                         wire:click="confirmBulkDelete"
-                        class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+                        class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-50"
+                        x-bind:disabled="!$wire.selected.length"
+                        wire:loading.attr="disabled"
                     >
                         <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
-                        Hapus {{ count($selected) }} nilai terpilih
+                        Hapus nilai terpilih<span x-text="$wire.selected.length ? ' (' + $wire.selected.length + ')' : ''"></span>
+                        <i data-lucide="loader-2" class="h-4 w-4 animate-spin" wire:loading wire:target="confirmBulkDelete" aria-hidden="true"></i>
                     </button>
                 @endif
             </div>
@@ -220,10 +228,16 @@
                             @if ($bisaHapus)
                                 <td class="px-4 py-3">
                                     @if ($nilai || $nilaiTerhapus)
+                                        {{-- wire:model TANPA .live: mencentang tidak boleh memicu
+                                             request. Dengan .live, tiap klik mengirim satu request
+                                             penuh (render ulang seluruh halaman, ~160 KB balasan),
+                                             sehingga centang baru terlihat setelah bolak-balik
+                                             jaringan — terasa macet di server yang jauh. Nilainya
+                                             ikut terkirim saat tombol hapus diklik. --}}
                                         <input
                                             type="checkbox"
                                             value="{{ $nilai?->id ?? $nilaiTerhapus->id }}"
-                                            wire:model.live="selected"
+                                            wire:model="selected"
                                             class="size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
                                             title="{{ $nilaiTerhapus ? 'Pilih untuk dihapus permanen' : 'Pilih untuk dihapus' }}"
                                         />

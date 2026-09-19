@@ -199,3 +199,13 @@ it('forbids restore and permanent delete without the delete nilai permission', f
 
     expect(Nilai::withTrashed()->find($nilai->id)->trashed())->toBeTrue();
 });
+
+it('binds the bulk-delete checkboxes without .live so ticking costs no request', function () {
+    [$mahasiswa] = nilaiTerhapusUntukMahasiswa();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('showTrashed', true)
+        ->assertSee('wire:model="selected"', escape: false)
+        ->assertDontSee('wire:model.live="selected"', escape: false);
+});
