@@ -277,21 +277,38 @@
                             <td class="px-4 py-3 text-right">
                                 <div class="inline-flex items-center gap-1">
                                     @if ($nilaiTerhapus)
+                                        {{-- wire:target menyertakan id barisnya: tanpa itu "restore" cocok dengan panggilan restore
+                                             mana pun, sehingga spinner berputar di SEMUA baris terhapus sekaligus padahal hanya satu
+                                             yang sedang diproses. --}}
                                         <button
                                             type="button"
                                             wire:click="restore({{ $nilaiTerhapus->id }})"
-                                            class="inline-flex items-center justify-center rounded-lg p-2 text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-700"
+                                            wire:loading.attr="disabled"
+                                            wire:target="restore({{ $nilaiTerhapus->id }})"
+                                            class="inline-flex items-center justify-center rounded-lg p-2 text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
                                             title="Pulihkan nilai"
                                         >
-                                            <i data-lucide="rotate-ccw" class="h-4 w-4" aria-hidden="true"></i>
+                                            <span wire:loading.remove wire:target="restore({{ $nilaiTerhapus->id }})" class="inline-flex">
+                                                <i data-lucide="rotate-ccw" class="h-4 w-4" aria-hidden="true"></i>
+                                            </span>
+                                            <span wire:loading wire:target="restore({{ $nilaiTerhapus->id }})" class="inline-flex">
+                                                <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                                            </span>
                                         </button>
                                         <button
                                             type="button"
                                             wire:click="confirmForceDelete({{ $nilaiTerhapus->id }})"
-                                            class="inline-flex items-center justify-center rounded-lg p-2 text-rose-600 transition hover:bg-rose-50 hover:text-rose-800"
+                                            wire:loading.attr="disabled"
+                                            wire:target="confirmForceDelete({{ $nilaiTerhapus->id }})"
+                                            class="inline-flex items-center justify-center rounded-lg p-2 text-rose-600 transition hover:bg-rose-50 hover:text-rose-800 disabled:opacity-50"
                                             title="Hapus permanen"
                                         >
-                                            <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+                                            <span wire:loading.remove wire:target="confirmForceDelete({{ $nilaiTerhapus->id }})" class="inline-flex">
+                                                <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+                                            </span>
+                                            <span wire:loading wire:target="confirmForceDelete({{ $nilaiTerhapus->id }})" class="inline-flex">
+                                                <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                                            </span>
                                         </button>
                                     @else
                                     @if (\App\Support\PanelAccess::can(auth()->user(), 'nilai', 'update'))
@@ -307,10 +324,17 @@
                                         <button
                                             type="button"
                                             wire:click="confirmDelete({{ $nilai->id }})"
-                                            class="inline-flex items-center justify-center rounded-lg p-2 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
+                                            wire:loading.attr="disabled"
+                                            wire:target="confirmDelete({{ $nilai->id }})"
+                                            class="inline-flex items-center justify-center rounded-lg p-2 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
                                             title="Hapus nilai"
                                         >
-                                            <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+                                            <span wire:loading.remove wire:target="confirmDelete({{ $nilai->id }})" class="inline-flex">
+                                                <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+                                            </span>
+                                            <span wire:loading wire:target="confirmDelete({{ $nilai->id }})" class="inline-flex">
+                                                <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                                            </span>
                                         </button>
                                     @endif
                                     @endif

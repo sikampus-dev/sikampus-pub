@@ -233,3 +233,23 @@ it('shows a loading state on the delete button inside the confirmation modals', 
         ->call('confirmForceDelete', $krs->id)
         ->assertSee('wire:loading wire:target="forceDeleteKrs"', escape: false);
 });
+
+it('gives each row button its own loading target so only that row spins', function () {
+    [$mahasiswa, , $krs] = krsTerhapusUntukMahasiswa();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('showTrashed', true)
+        ->assertSee('wire:target="restore('.$krs->id.')"', escape: false)
+        ->assertSee('wire:target="confirmForceDelete('.$krs->id.')"', escape: false)
+        ->assertDontSee('wire:target="restore"', escape: false);
+});
+
+it('targets the per-row delete button at that row only', function () {
+    $mahasiswa = Mahasiswa::factory()->create();
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->assertSee('wire:target="confirmDelete('.$krs->id.')"', escape: false);
+});
