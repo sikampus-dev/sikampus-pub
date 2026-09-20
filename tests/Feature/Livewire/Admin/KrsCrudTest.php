@@ -245,6 +245,46 @@ it('blocks adding a duplicate krs row via the tambah krs modal', function () {
     expect(Krs::where('id_mahasiswa', $mahasiswa->id)->where('id_kelas', $kelas->id)->count())->toBe(1);
 });
 
+it('menampilkan kelas mahasiswa di tabel index KRS', function () {
+    $admin = adminUser();
+
+    $kelompokKelas = KelompokKelas::factory()->create(['nama' => 'PSCA 24 A']);
+    $mahasiswa = Mahasiswa::factory()->create(['nama' => 'Dedi Kurniawan', 'nim' => '2024000033', 'id_kelompok_kelas' => $kelompokKelas->id]);
+    $kelas = Kelas::factory()->create(['id_prodi' => $mahasiswa->id_prodi]);
+    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelas->id]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.akademik.krs'))
+        ->assertOk()
+        ->assertSee('PSCA 24 A');
+});
+
+it('menampilkan kelas mahasiswa pada cabang belum mengajukan di tabel index KRS', function () {
+    $admin = adminUser();
+
+    $semester = Semester::factory()->create();
+    $kelompokKelas = KelompokKelas::factory()->create(['nama' => 'PSCA 24 C']);
+    Mahasiswa::factory()->create(['nama' => 'Eka Prasetya', 'nim' => '2024000044', 'id_kelompok_kelas' => $kelompokKelas->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('filterSemester', (string) $semester->id)
+        ->set('filterStatusPengajuan', 'belum_mengajukan')
+        ->assertSee('PSCA 24 C');
+});
+
+it('menampilkan kelas mahasiswa di halaman detail KRS', function () {
+    $admin = adminUser();
+
+    $kelompokKelas = KelompokKelas::factory()->create(['nama' => 'PSCA 24 B']);
+    $mahasiswa = Mahasiswa::factory()->create(['id_kelompok_kelas' => $kelompokKelas->id]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.akademik.krs.show', $mahasiswa->id))
+        ->assertOk()
+        ->assertSee('PSCA 24 B');
+});
+
 it('menampilkan kode kelas di tabel detail KRS', function () {
     $admin = adminUser();
     $mahasiswa = Mahasiswa::factory()->create();
