@@ -173,6 +173,63 @@ it('lists mata kuliah sorted by name on the detail krs page', function () {
         ->assertSeeInOrder(['Anatomi Manusia', 'Biologi Sel', 'Zoologi Dasar']);
 });
 
+it('adds a krs row via the tambah krs modal on the show page', function () {
+    $admin = adminUser();
+
+    $mahasiswa = Mahasiswa::factory()->create();
+    $kelas = Kelas::factory()->create(['id_prodi' => $mahasiswa->id_prodi]);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->call('bukaTambahKrsModal')
+        ->assertSet('showTambahKrsModal', true)
+        ->set('tambahKrs.0.id_kelas', $kelas->id)
+        ->call('simpanTambahKrs')
+        ->assertSet('showTambahKrsModal', false);
+
+    expect(Krs::where('id_mahasiswa', $mahasiswa->id)->where('id_kelas', $kelas->id)->exists())->toBeTrue();
+});
+
+it('offers kelas options for the tambah krs modal scoped to the mahasiswa prodi only', function () {
+    $admin = adminUser();
+
+    $prodiA = Prodi::factory()->create();
+    $prodiB = Prodi::factory()->create();
+    $mahasiswa = Mahasiswa::factory()->create(['id_prodi' => $prodiA->id]);
+    $kelasProdiA = Kelas::factory()->create(['id_prodi' => $prodiA->id]);
+    $matkulA = Matkul::factory()->create(['nama' => 'Matkul Prodi A']);
+    $kelasProdiA->kurikulumMatkul()->update(['id_matkul' => $matkulA->id]);
+    $kelasProdiB = Kelas::factory()->create(['id_prodi' => $prodiB->id]);
+    $matkulB = Matkul::factory()->create(['nama' => 'Matkul Prodi B']);
+    $kelasProdiB->kurikulumMatkul()->update(['id_matkul' => $matkulB->id]);
+
+    $component = Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->call('bukaTambahKrsModal');
+
+    $options = $component->instance()->kelasOptionsTambahKrs();
+
+    expect($options)->toHaveKey($kelasProdiA->id);
+    expect($options)->not->toHaveKey($kelasProdiB->id);
+});
+
+it('blocks adding a duplicate krs row via the tambah krs modal', function () {
+    $admin = adminUser();
+
+    $mahasiswa = Mahasiswa::factory()->create();
+    $kelas = Kelas::factory()->create(['id_prodi' => $mahasiswa->id_prodi]);
+    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelas->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->call('bukaTambahKrsModal')
+        ->set('tambahKrs.0.id_kelas', $kelas->id)
+        ->call('simpanTambahKrs')
+        ->assertSet('showTambahKrsModal', true);
+
+    expect(Krs::where('id_mahasiswa', $mahasiswa->id)->where('id_kelas', $kelas->id)->count())->toBe(1);
+});
+
 it('menampilkan kode kelas di tabel detail KRS', function () {
     $admin = adminUser();
     $mahasiswa = Mahasiswa::factory()->create();

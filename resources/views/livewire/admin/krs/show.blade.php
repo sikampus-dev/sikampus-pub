@@ -109,6 +109,14 @@
                     <i data-lucide="printer" class="h-4 w-4" aria-hidden="true"></i>
                     Cetak
                 </a>
+                <button
+                    type="button"
+                    wire:click="bukaTambahKrsModal"
+                    class="inline-flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800"
+                >
+                    <i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>
+                    Tambah KRS
+                </button>
             </div>
         </div>
 
@@ -402,6 +410,106 @@
                         <span wire:loading wire:target="bulkDelete" class="inline-flex items-center gap-2">
                             <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
                             Menghapus...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if ($showTambahKrsModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 px-4">
+            <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-border-lg">
+                <div class="mb-4 flex items-center justify-between">
+                    <h3 class="text-base font-semibold text-neutral-900">Tambah KRS — {{ $this->mahasiswa->nama }}</h3>
+                    <button
+                        type="button"
+                        wire:click="tutupTambahKrsModal"
+                        class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
+                    >
+                        <i data-lucide="x" class="h-5 w-5" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                @if ($tambahKrsError !== '')
+                    <div class="mb-4 flex gap-3 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        <i data-lucide="circle-alert" class="h-5 w-5 shrink-0 text-red-600" aria-hidden="true"></i>
+                        <span>{{ $tambahKrsError }}</span>
+                    </div>
+                @endif
+
+                <div class="space-y-4">
+                    @foreach ($tambahKrs as $index => $row)
+                        <div class="rounded-lg bg-neutral-50 p-4 shadow-border" wire:key="tambah-krs-row-{{ $index }}">
+                            <div class="mb-3 flex items-center justify-between">
+                                <h4 class="text-xs font-semibold text-neutral-700">KRS Ke-{{ $index + 1 }}</h4>
+                                @if (count($tambahKrs) > 1)
+                                    <button
+                                        type="button"
+                                        wire:click="removeTambahKrsRow({{ $index }})"
+                                        class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
+                                    >
+                                        <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+                                    </button>
+                                @endif
+                            </div>
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Kelas *</label>
+                                    <x-searchable-select
+                                        :model="'tambahKrs.'.$index.'.id_kelas'"
+                                        :options="$this->kelasOptionsTambahKrs"
+                                        placeholder="— Pilih kelas —"
+                                    />
+                                    @error('tambahKrs.'.$index.'.id_kelas') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div>
+                                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Status</label>
+                                    <select wire:model="tambahKrs.{{ $index }}.status" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border">
+                                        <option value="pending">Pending</option>
+                                        <option value="acc">Acc/Approved</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+
+                    <div class="flex justify-center">
+                        <button
+                            type="button"
+                            wire:click="addTambahKrsRow"
+                            class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 shadow-border transition hover:bg-neutral-50"
+                        >
+                            <i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>
+                            Tambah Baris
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        wire:click="tutupTambahKrsModal"
+                        wire:loading.attr="disabled"
+                        wire:target="simpanTambahKrs"
+                        class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border disabled:opacity-50"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="simpanTambahKrs"
+                        wire:loading.attr="disabled"
+                        wire:target="simpanTambahKrs"
+                        class="inline-flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800 disabled:opacity-75"
+                    >
+                        <span wire:loading.remove wire:target="simpanTambahKrs" class="inline-flex items-center gap-2">
+                            <i data-lucide="save" class="h-4 w-4" aria-hidden="true"></i>
+                            Simpan
+                        </span>
+                        <span wire:loading wire:target="simpanTambahKrs" class="inline-flex items-center gap-2">
+                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin" aria-hidden="true"></i>
+                            Menyimpan...
                         </span>
                     </button>
                 </div>

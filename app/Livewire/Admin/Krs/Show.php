@@ -13,6 +13,7 @@ use App\Services\UrutanMatkulService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -42,6 +43,16 @@ class Show extends Component
     public array $selected = [];
 
     public bool $confirmingBulkDelete = false;
+
+    // ---- Modal tambah KRS — form yang sama dengan mode create Krs\Form, tapi tanpa langkah
+    // cari-pilih mahasiswa: mahasiswa sudah tetap, yaitu mahasiswa halaman ini. Lihat
+    // simpanTambahKrs() untuk logika simpan (disalin dari Krs\Form::saveCreate).
+    public bool $showTambahKrsModal = false;
+
+    /** @var array<int, array{id_kelas: int|null, status: string|null}> */
+    public array $tambahKrs = [];
+
+    public string $tambahKrsError = '';
 
     public function mount(int $id): void
     {
@@ -95,6 +106,161 @@ class Show extends Component
             ->get(['id', 'kode', 'nama'])
             ->mapWithKeys(fn ($semester) => [$semester->id => "{$semester->nama} ({$semester->kode})"])
             ->all();
+    }
+
+    /**
+     * Opsi kelas untuk modal tambah KRS, dibatasi ke prodi mahasiswa halaman ini — sama seperti
+     * Krs\Form::kelasOptions, disederhanakan karena mahasiswanya sudah tetap (bukan hasil pilihan
+     * pencarian di form create biasa).
+     *
+     * @return array<int, string>
+     */
+    #[Computed]
+    public function kelasOptionsTambahKrs(): array
+    {
+        $prodiId = $this->mahasiswa->id_prodi;
+
+        if (! $prodiId) {
+            return [];
+        }
+
+        return Kelas::with(['kurikulumMatkul.matkul', 'semester', 'kelompokKelas'])
+            ->where('id_prodi', $prodiId)
+            ->orderByDesc('id_semester')
+            ->get()
+            ->mapWithKeys(function ($kelas) {
+                $matkul = $kelas->kurikulumMatkul->matkul ?? null;
+                $label = ($matkul?->kode ? $matkul->kode.' - ' : '').($matkul?->nama ?? 'Mata Kuliah');
+                if ($kelas->kelompokKelas?->nama) {
+                    $label .= ' · Kelompok: '.$kelas->kelompokKelas->nama;
+                }
+                if ($kelas->semester) {
+                    $label .= ' (Semester: '.$kelas->semester->nama.')';
+                }
+
+                return [$kelas->id => $label];
+            })
+            ->all();
+    }
+
+    public function bukaTambahKrsModal(): void
+    {
+        $this->tambahKrs = [['id_kelas' => null, 'status' => 'pending']];
+        $this->tambahKrsError = '';
+        $this->resetValidation();
+        $this->showTambahKrsModal = true;
+    }
+
+    public function tutupTambahKrsModal(): void
+    {
+        $this->showTambahKrsModal = false;
+        $this->tambahKrs = [];
+        $this->tambahKrsError = '';
+        $this->resetValidation();
+    }
+
+    public function addTambahKrsRow(): void
+    {
+        $this->tambahKrs[] = ['id_kelas' => null, 'status' => 'pending'];
+    }
+
+    public function removeTambahKrsRow(int $index): void
+    {
+        if (count($this->tambahKrs) <= 1) {
+            return;
+        }
+
+        unset($this->tambahKrs[$index]);
+        $this->tambahKrs = array_values($this->tambahKrs);
+    }
+
+    /**
+     * Sama persis dengan Krs\Form::saveCreate (dan KrsController::store) — id_mahasiswa di sini
+     * selalu mahasiswaId halaman ini, bukan hasil cari-pilih, jadi tidak ada langkah pemilihan
+     * mahasiswa maupun pengecekan scope untuknya (sudah dijamin di mount()). Scope kelas tetap
+     * diperiksa per baris karena opsinya bisa saja dimanipulasi dari luar daftar yang ditampilkan.
+     */
+    public function simpanTambahKrs(): void
+    {
+        $this->tambahKrsError = '';
+
+        $validated = $this->validate([
+            'tambahKrs' => ['required', 'array', 'min:1'],
+            'tambahKrs.*.id_kelas' => ['required', 'integer', 'exists:kelas,id'],
+            'tambahKrs.*.status' => ['nullable', 'string', Rule::in(['pending', 'acc'])],
+        ]);
+
+        $user = Auth::user();
+        if ($user && $user->hasScopeRestriction()) {
+            $allowedProdiIds = $user->getAllowedProdiIds();
+            if ($allowedProdiIds !== null) {
+                foreach ($validated['tambahKrs'] as $row) {
+                    $kelas = Kelas::find($row['id_kelas']);
+                    if (! $kelas || ! in_array((int) $kelas->id_prodi, $allowedProdiIds, true)) {
+                        abort(403, 'Anda tidak memiliki akses ke kelas ini.');
+                    }
+                }
+            }
+        }
+
+        $errors = [];
+        $createdCount = 0;
+
+        DB::beginTransaction();
+        try {
+            foreach ($validated['tambahKrs'] as $row) {
+                $exists = Krs::where('id_mahasiswa', $this->mahasiswaId)
+                    ->where('id_kelas', $row['id_kelas'])
+                    ->whereNull('deleted_at')
+                    ->exists();
+
+                if ($exists) {
+                    $errors[] = 'Salah satu kelas yang dipilih sudah ada di KRS mahasiswa ini.';
+
+                    continue;
+                }
+
+                $kelasBaris = Kelas::find($row['id_kelas']);
+                $sudahTerdaftar = $kelasBaris ? PendaftaranKrs::krsMataKuliahSamaDenganKelas($this->mahasiswaId, $kelasBaris) : null;
+                if ($sudahTerdaftar) {
+                    $errors[] = PendaftaranKrs::pesanSudahTerdaftar($sudahTerdaftar);
+
+                    continue;
+                }
+
+                $status = $row['status'] ?: 'pending';
+                $isApproved = $status === 'acc';
+
+                Krs::create([
+                    'id_mahasiswa' => $this->mahasiswaId,
+                    'id_kelas' => $row['id_kelas'],
+                    'approved_by' => $isApproved ? ($user->name ?? $user->email ?? null) : null,
+                    'approved_at' => $isApproved ? now() : null,
+                ]);
+
+                $createdCount++;
+            }
+
+            if (! empty($errors)) {
+                DB::rollBack();
+                $this->tambahKrsError = implode(' ', array_unique($errors));
+
+                return;
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $this->tambahKrsError = 'Terjadi kesalahan saat menyimpan KRS: '.$e->getMessage();
+
+            return;
+        }
+
+        $this->showTambahKrsModal = false;
+        $this->tambahKrs = [];
+        unset($this->krsList, $this->summary);
+
+        session()->flash('status', "{$createdCount} data KRS berhasil dibuat.");
     }
 
     /**
