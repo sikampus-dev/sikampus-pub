@@ -4,6 +4,7 @@ use App\Livewire\Admin\Krs\Form;
 use App\Livewire\Admin\Krs\Index;
 use App\Livewire\Admin\Krs\Show;
 use App\Models\Kelas;
+use App\Models\KelompokKelas;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
 use App\Models\Matkul;
