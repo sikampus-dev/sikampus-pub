@@ -439,7 +439,16 @@ class Index extends Component
             // (jadwal_count), BUKAN dari kelas.jml_pertemuan — kolom itu cuma target/rencana yang
             // diisi manual saat kelas dibuat, bisa berbeda dari jumlah slot jadwal yang sungguhan
             // terbentuk (mis. sebagian belum dibuat, atau dibuat lebih lewat import terpisah).
-            ->withCount('jadwal');
+            ->withCount('jadwal')
+            // Kolom "Jumlah Mahasiswa" dihitung dari KRS berstatus aktif (approved_at terisi) saja
+            // — sama seperti badge "Aktif" di Krs\Show. KRS yang masih pending atau sudah
+            // soft-deleted (dikecualikan otomatis oleh global scope SoftDeletes pada Krs) tidak
+            // ikut dihitung. Tidak perlu distinct id_mahasiswa: krs_unique (id_mahasiswa +
+            // id_kelas) membuat satu mahasiswa mustahil punya lebih dari satu baris KRS aktif
+            // untuk kelas yang sama.
+            ->withCount(['krs as jumlah_mahasiswa' => function ($q) {
+                $q->whereNotNull('approved_at');
+            }]);
 
         if ($this->showTrashed) {
             $query->withTrashed();

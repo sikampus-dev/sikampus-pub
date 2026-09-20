@@ -321,6 +321,27 @@ it('shows the jumlah pertemuan column counting actual jadwal rows, not the jml_p
     expect($kelasList->firstWhere('id', $kelas->id)->jadwal_count)->toBe(2);
 });
 
+it('shows the jumlah mahasiswa column counting only krs rows with an active (approved) status', function () {
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+
+    // Aktif — harus ikut terhitung.
+    Krs::factory()->count(2)->create(['id_kelas' => $kelas->id, 'approved_at' => now()]);
+
+    // Pending (approved_at kosong) — tidak boleh ikut terhitung.
+    Krs::factory()->create(['id_kelas' => $kelas->id, 'approved_at' => null]);
+
+    // Sudah aktif tapi KRS-nya sendiri sudah soft-deleted — tidak boleh ikut terhitung.
+    $trashedKrs = Krs::factory()->create(['id_kelas' => $kelas->id, 'approved_at' => now()]);
+    $trashedKrs->delete();
+
+    $kelasList = Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->viewData('kelasList');
+
+    expect($kelasList->firstWhere('id', $kelas->id)->jumlah_mahasiswa)->toBe(2);
+});
+
 it('rejects a duplicate kombinasi kurikulum matkul, semester, dan angkatan', function () {
     $admin = adminUser();
     $prodi = Prodi::factory()->create();
