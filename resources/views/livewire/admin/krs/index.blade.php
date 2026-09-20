@@ -119,6 +119,7 @@
                         <th class="px-4 py-3">NIM</th>
                         <th class="px-4 py-3">Nama</th>
                         <th class="px-4 py-3">Prodi</th>
+                        <th class="px-4 py-3">Kelas Mahasiswa</th>
                         <th class="px-4 py-3">Dosen Wali</th>
                         <th class="px-4 py-3 text-center">SKS Diajukan</th>
                         <th class="px-4 py-3 text-center">SKS Di-acc</th>
@@ -136,6 +137,7 @@
                                     <span class="text-neutral-400">- {{ $row['jenjang_kode'] }}</span>
                                 @endif
                             </td>
+                            <td class="px-4 py-3 text-neutral-600">{{ $row['kelompok_kelas_nama'] ?? '—' }}</td>
                             <td class="px-4 py-3 text-neutral-600">{{ $row['dosen_wali'] }}</td>
                             <td class="px-4 py-3 text-center font-medium text-neutral-900">{{ $row['sks_diajukan'] }}</td>
                             <td class="px-4 py-3 text-center font-medium text-neutral-900">{{ $row['sks_diacc'] }}</td>
@@ -151,7 +153,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada data KRS.</td>
+                            <td colspan="8" class="px-4 py-10 text-center text-neutral-500">Belum ada data KRS.</td>
                         </tr>
                     @endforelse
                 </tbody>

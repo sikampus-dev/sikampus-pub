@@ -123,8 +123,16 @@ class Index extends Component
                 'prodi.id as id_prodi',
                 'prodi.nama as prodi_nama',
                 'prodi.id_jenjang',
+                // Kolom "Kelas Mahasiswa" — tidak ada di KrsController::index (API belum
+                // menampilkannya di baris ini), murni tambahan panel. Sama seperti label "Kelas
+                // Mahasiswa" yang sudah dipakai di Krs\Form untuk info mahasiswa terpilih.
+                'kelompok_kelas.nama as kelompok_kelas_nama',
             ])
             ->join('prodi', 'mahasiswa.id_prodi', '=', 'prodi.id')
+            ->leftJoin('kelompok_kelas', function ($join): void {
+                $join->on('mahasiswa.id_kelompok_kelas', '=', 'kelompok_kelas.id')
+                    ->whereNull('kelompok_kelas.deleted_at');
+            })
             ->whereNull('mahasiswa.deleted_at')
             ->whereNull('prodi.deleted_at')
             ->whereNotExists(function ($sub) use ($semesterId): void {
@@ -169,12 +177,19 @@ class Index extends Component
             DB::raw('MAX(prodi.id) as id_prodi'),
             DB::raw('MAX(prodi.nama) as prodi_nama'),
             DB::raw('MAX(prodi.id_jenjang) as id_jenjang'),
+            // Kolom "Kelas Mahasiswa" — tidak ada di KrsController::index, murni tambahan panel
+            // (lihat catatan sama di mahasiswaTanpaKrsSemesterQuery()).
+            DB::raw('MAX(kelompok_kelas.nama) as kelompok_kelas_nama'),
             DB::raw('COUNT(DISTINCT krs.id) as total_kelas'),
             DB::raw('COALESCE(SUM(CASE WHEN krs.approved_at IS NOT NULL THEN matkul.sks ELSE 0 END), 0) as sks_diacc'),
             DB::raw('COALESCE(SUM(matkul.sks), 0) as sks_diajukan'),
         ])
             ->join('mahasiswa', 'krs.id_mahasiswa', '=', 'mahasiswa.id')
             ->join('prodi', 'mahasiswa.id_prodi', '=', 'prodi.id')
+            ->leftJoin('kelompok_kelas', function ($join): void {
+                $join->on('mahasiswa.id_kelompok_kelas', '=', 'kelompok_kelas.id')
+                    ->whereNull('kelompok_kelas.deleted_at');
+            })
             ->join('kelas', 'krs.id_kelas', '=', 'kelas.id')
             ->join('kurikulum_matkul', 'kelas.id_kurikulum_matkul', '=', 'kurikulum_matkul.id')
             ->join('matkul', 'kurikulum_matkul.id_matkul', '=', 'matkul.id')
@@ -260,6 +275,7 @@ class Index extends Component
                 'nama' => $item->nama,
                 'prodi_nama' => $item->prodi_nama,
                 'jenjang_kode' => $jenjangData[$item->id_prodi] ?? null,
+                'kelompok_kelas_nama' => $item->kelompok_kelas_nama ?? null,
                 'dosen_wali' => $dosenWaliData[$item->id_mahasiswa] ?? '—',
                 'sks_diajukan' => isset($item->sks_diajukan) ? (int) $item->sks_diajukan : 0,
                 'sks_diacc' => isset($item->sks_diacc) ? (int) $item->sks_diacc : 0,

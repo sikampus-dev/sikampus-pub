@@ -58,6 +58,10 @@
                 </p>
             </div>
             <div>
+                <span class="text-xs font-medium text-neutral-500">Kelas Mahasiswa</span>
+                <p class="text-sm font-semibold text-neutral-900">{{ $this->mahasiswa->kelompok_kelas->nama ?? '—' }}</p>
+            </div>
+            <div>
                 <span class="text-xs font-medium text-neutral-500">Dosen Wali</span>
                 <p class="text-sm font-semibold text-neutral-900">{{ $this->dosenWali }}</p>
             </div>
