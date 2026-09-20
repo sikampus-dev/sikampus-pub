@@ -152,7 +152,23 @@
             @endif
         </div>
 
-        <div class="overflow-x-auto">
+        {{-- wire:target menyebut nama properti filter/toggle secara eksplisit, bukan dibiarkan
+             kosong: kalau kosong, wire:loading ikut menyala untuk request LAIN dari komponen ini
+             (mis. hapus satu baris), padahal yang diminta cuma indikator untuk filter. --}}
+        <div
+            wire:loading.flex
+            wire:target="filterSemester, showTrashed"
+            class="print:hidden mb-4 items-center gap-2 rounded-lg bg-neutral-50 px-4 py-2 text-xs font-medium text-neutral-500"
+        >
+            <i data-lucide="loader-2" class="h-3.5 w-3.5 animate-spin" aria-hidden="true"></i>
+            Memuat data...
+        </div>
+
+        <div
+            class="overflow-x-auto"
+            wire:loading.class="opacity-50 pointer-events-none"
+            wire:target="filterSemester, showTrashed"
+        >
             <table class="w-full text-left text-sm">
                 <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     <tr>

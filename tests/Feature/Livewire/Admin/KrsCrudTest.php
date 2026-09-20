@@ -99,6 +99,20 @@ it('redirects unauthenticated users to the login page', function () {
     $this->get(route('admin.akademik.krs'))->assertRedirect(route('login'));
 });
 
+it('shows a loading indicator scoped to the search/filter fields on the index page', function () {
+    Livewire::actingAs(adminUser())
+        ->test(Index::class)
+        ->assertSee('wire:target="search, filterProdi, filterSemester, filterStatusPengajuan"', escape: false);
+});
+
+it('shows a loading indicator scoped to the filter/toggle fields on the show page', function () {
+    $mahasiswa = Mahasiswa::factory()->create();
+
+    Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->assertSee('wire:target="filterSemester, showTrashed"', escape: false);
+});
+
 it('admin dengan scope prodi hanya melihat KRS mahasiswa di prodinya', function () {
     $prodiA = Prodi::factory()->create();
     $prodiB = Prodi::factory()->create();
