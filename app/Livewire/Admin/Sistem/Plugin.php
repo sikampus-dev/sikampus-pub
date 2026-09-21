@@ -36,6 +36,15 @@ class Plugin extends Component
 
     public function install(): void
     {
+        // Dicek sebelum validasi supaya tenant Cloud mendapat alasan yang benar, bukan pesan
+        // "pilih berkas". Gerbang sesungguhnya tetap di PluginInstaller::install().
+        if (! PluginInstaller::uploadsAllowed()) {
+            $this->pluginZip = null;
+            session()->flash('error', 'Instalasi Sikampus Cloud tidak dapat memasang plugin dari berkas ZIP. Hubungi tim Sikampus untuk memasang plugin.');
+
+            return;
+        }
+
         $this->validate([
             'pluginZip' => ['required', 'file', 'mimes:zip', 'max:'.config('plugins.max_zip_size_kb')],
         ], [
@@ -192,6 +201,8 @@ class Plugin extends Component
 
     public function render()
     {
-        return view('livewire.admin.sistem.plugin')->extends('layouts.web');
+        return view('livewire.admin.sistem.plugin', [
+            'uploadsAllowed' => PluginInstaller::uploadsAllowed(),
+        ])->extends('layouts.web');
     }
 }

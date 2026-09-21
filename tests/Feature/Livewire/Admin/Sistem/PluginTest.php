@@ -1,7 +1,9 @@
 <?php
 
+use App\Exceptions\Plugins\PluginInstallException;
 use App\Livewire\Admin\Sistem\Plugin as PluginComponent;
 use App\Models\Plugin;
+use App\Services\Plugins\PluginInstaller;
 use App\Services\Plugins\PluginManifestReader;
 use App\Services\Plugins\PluginZipExtractor;
 use App\Support\Plugins\AdminNavRegistry;
@@ -587,4 +589,82 @@ it('never shows a navbar group for a disabled plugin, since its provider never b
     $this->actingAs($admin)->get(route('admin.dashboard'))
         ->assertOk()
         ->assertDontSee('Disabled Nav');
+});
+
+// Tenant Sikampus Cloud berbagi satu server: plugin yang diunggah satu kampus bisa membaca
+// berkas tenant lain (termasuk .env-nya). Karena itu unggah plugin DITUTUP di tenant managed
+// -- lihat PluginInstaller::uploadsAllowed().
+
+it('refuses to install a plugin zip on a cloud-managed installation', function () {
+    config(['sikampus.managed' => true]);
+
+    $admin = adminUser();
+    $zipPath = storage_path('app/private/plugin-fixtures/managed.zip');
+    buildPluginZip($zipPath, 'managed-plugin');
+
+    Livewire::actingAs($admin)->test(PluginComponent::class)
+        ->set('pluginZip', pluginUploadedFile($zipPath))
+        ->call('install')
+        ->assertSee('tidak dapat memasang plugin dari berkas ZIP');
+
+    expect(Plugin::count())->toBe(0);
+    expect(File::isDirectory(config('plugins.install_path').'/managed-plugin'))->toBeFalse();
+});
+
+it('enforces the managed gate in PluginInstaller itself, not only in the UI', function () {
+    // Jalur pemasangan lain yang ditambahkan kelak (command, API) tidak boleh bisa melewatinya.
+    config(['sikampus.managed' => true]);
+
+    $zipPath = storage_path('app/private/plugin-fixtures/managed-direct.zip');
+    buildPluginZip($zipPath, 'managed-direct-plugin');
+
+    expect(fn () => app(PluginInstaller::class)->install(pluginUploadedFile($zipPath), adminUser()))
+        ->toThrow(PluginInstallException::class, 'Sikampus Cloud');
+
+    expect(Plugin::count())->toBe(0);
+    expect(File::isDirectory(config('plugins.install_path').'/managed-direct-plugin'))->toBeFalse();
+});
+
+it('hides the upload form on a cloud-managed installation and explains why', function () {
+    config(['sikampus.managed' => true]);
+
+    Livewire::actingAs(adminUser())->test(PluginComponent::class)
+        ->assertDontSee('Instal Plugin Baru')
+        ->assertDontSeeHtml('wire:model="pluginZip"')
+        ->assertSee('Pemasangan plugin dikelola oleh Sikampus Cloud');
+});
+
+it('keeps the upload form on a self-hosted installation', function () {
+    config(['sikampus.managed' => false]);
+
+    Livewire::actingAs(adminUser())->test(PluginComponent::class)
+        ->assertSee('Instal Plugin Baru')
+        ->assertDontSee('Pemasangan plugin dikelola oleh Sikampus Cloud');
+});
+
+it('still lets a cloud-managed installation enable, disable and delete an existing plugin', function () {
+    // Plugin yang sudah ada di disk dipasang oleh pihak yang berwenang (portal); mengelolanya
+    // tidak memasukkan kode baru, jadi tidak ikut ditutup.
+    $admin = adminUser();
+    $zipPath = storage_path('app/private/plugin-fixtures/existing.zip');
+    buildPluginZip($zipPath, 'existing-plugin');
+
+    Livewire::actingAs($admin)->test(PluginComponent::class)
+        ->set('pluginZip', pluginUploadedFile($zipPath))
+        ->call('install');
+
+    config(['sikampus.managed' => true]);
+
+    Livewire::actingAs($admin)->test(PluginComponent::class)->call('enable', 'existing-plugin');
+    expect(Plugin::where('slug', 'existing-plugin')->value('enabled'))->toBeTruthy();
+
+    Livewire::actingAs($admin)->test(PluginComponent::class)->call('disable', 'existing-plugin');
+    expect(Plugin::where('slug', 'existing-plugin')->value('enabled'))->toBeFalsy();
+
+    Livewire::actingAs($admin)->test(PluginComponent::class)
+        ->call('confirmDelete', 'existing-plugin')
+        ->set('confirmSlugInput', 'existing-plugin')
+        ->call('destroy');
+
+    expect(Plugin::where('slug', 'existing-plugin')->exists())->toBeFalse();
 });

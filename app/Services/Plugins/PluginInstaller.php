@@ -23,8 +23,32 @@ class PluginInstaller
         private readonly PluginManifestReader $manifestReader,
     ) {}
 
+    /**
+     * Unggah plugin DITUTUP di tenant Sikampus Cloud (config('sikampus.managed')).
+     *
+     * Plugin adalah kode PHP yang berjalan dengan hak penuh aplikasi. Di Cloud, semua tenant
+     * berbagi satu server -- plugin yang diunggah superadmin satu kampus bisa membaca berkas
+     * tenant lain, termasuk .env berisi kredensial database-nya. Di self-hosted risikonya
+     * hanya milik pemilik server itu sendiri, jadi di sana unggah tetap diizinkan.
+     *
+     * Gerbangnya di sini, bukan hanya di komponen Livewire, supaya jalur pemasangan mana pun
+     * yang ditambahkan kelak ikut tertutup. Plugin untuk tenant Cloud dipasang oleh portal
+     * Sikampus. Mengaktifkan, migrasi, dan menghapus plugin yang sudah ada tetap boleh --
+     * ketiganya tidak memasukkan kode baru.
+     */
+    public static function uploadsAllowed(): bool
+    {
+        return ! config('sikampus.managed');
+    }
+
     public function install(UploadedFile $file, ?User $installedBy): Plugin
     {
+        if (! static::uploadsAllowed()) {
+            throw new PluginInstallException(
+                'Instalasi Sikampus Cloud tidak dapat memasang plugin dari berkas ZIP. Hubungi tim Sikampus untuk memasang plugin.'
+            );
+        }
+
         $diskName = config('plugins.upload_disk');
         $disk = Storage::disk($diskName);
 
