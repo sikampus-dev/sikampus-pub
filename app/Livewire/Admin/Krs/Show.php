@@ -31,11 +31,12 @@ class Show extends Component
     public ?int $confirmDeleteId = null;
 
     /**
-     * Opsi di modal konfirmasi hapus satuan: kalau dicentang, nilai yang terkait KRS ini ikut
-     * di-soft-delete — termasuk nilai FINAL, yang sebetulnya menahan Krs::delete() lewat
-     * Krs::$hapusDiblokirOleh (lihat hapusKrsBesertaNilai()). Tanpa opsi ini dicentang, perilakunya
-     * tetap seperti sebelumnya: nilai belum final ikut terhapus otomatis lewat AturanHapusBerantai,
-     * nilai final tetap memblokir.
+     * Opsi di modal konfirmasi hapus — dipakai bersama oleh hapus satuan (delete()) dan hapus
+     * massal (bulkDelete()): kalau dicentang, nilai yang terkait KRS ikut di-soft-delete —
+     * termasuk nilai FINAL, yang sebetulnya menahan Krs::delete() lewat Krs::$hapusDiblokirOleh
+     * (lihat hapusKrsBesertaNilai()). Tanpa opsi ini dicentang, perilakunya tetap seperti
+     * sebelumnya: nilai belum final ikut terhapus otomatis lewat AturanHapusBerantai, nilai final
+     * tetap memblokir (satuan: peringatan; massal: baris itu dilewati).
      */
     public bool $hapusNilaiTerkait = false;
 
@@ -527,8 +528,10 @@ class Show extends Component
      * menyebut jumlah masing-masing lebih dulu dan hasilnya dilaporkan terpisah.
      *
      * Baris yang ditolak (punya nilai final, atau sisa nilainya masih dipakai konversi) dilewati,
-     * bukan menggagalkan seluruh aksi: satu baris bermasalah tidak boleh membatalkan puluhan baris
-     * lain yang sudah benar.
+     * bukan menggagalkan seluruh aksi — KECUALI kalau opsi $hapusNilaiTerkait dicentang (dan admin
+     * berhak, lihat bisaHapusNilai()): baris berstatus nilai final tidak lagi dilewati, melainkan
+     * ikut dihapus beserta nilainya lewat hapusKrsBesertaNilai(), sama seperti aksi satuan di
+     * delete(). Satu baris bermasalah tetap tidak boleh membatalkan puluhan baris lain yang benar.
      */
     public function bulkDelete(): void
     {
@@ -536,19 +539,29 @@ class Show extends Component
 
         if ($terpilih->isEmpty()) {
             $this->confirmingBulkDelete = false;
+            $this->hapusNilaiTerkait = false;
 
             return;
         }
+
+        $hapusNilaiTerkait = $this->hapusNilaiTerkait && $this->bisaHapusNilai();
 
         $dihapus = 0;
         $dihapusPermanen = 0;
         $dilewati = [];
 
-        DB::transaction(function () use ($terpilih, &$dihapus, &$dihapusPermanen, &$dilewati): void {
+        DB::transaction(function () use ($terpilih, $hapusNilaiTerkait, &$dihapus, &$dihapusPermanen, &$dilewati): void {
             foreach ($terpilih as $krs) {
                 $label = $krs->kelas?->kurikulumMatkul?->matkul?->kode ?? "ID {$krs->id}";
 
                 if (! $krs->trashed()) {
+                    if ($hapusNilaiTerkait) {
+                        $this->hapusKrsBesertaNilai($krs);
+                        $dihapus++;
+
+                        continue;
+                    }
+
                     try {
                         // Nilai final menolak KRS-nya dihapus (Krs::$hapusDiblokirOleh). Di aksi
                         // satuan penolakan itu muncul sebagai peringatan lewat hook `exception`
@@ -576,6 +589,7 @@ class Show extends Component
 
         $this->selected = [];
         $this->confirmingBulkDelete = false;
+        $this->hapusNilaiTerkait = false;
         unset($this->krsList, $this->summary);
 
         $pesan = [];
@@ -605,12 +619,14 @@ class Show extends Component
             return;
         }
 
+        $this->hapusNilaiTerkait = false;
         $this->confirmingBulkDelete = true;
     }
 
     public function cancelBulkDelete(): void
     {
         $this->confirmingBulkDelete = false;
+        $this->hapusNilaiTerkait = false;
     }
 
     /**

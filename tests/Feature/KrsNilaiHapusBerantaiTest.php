@@ -243,3 +243,73 @@ it('menyembunyikan opsi hapus nilai terkait dari admin tanpa hak hapus nilai', f
         ->call('confirmDelete', $krs->id)
         ->assertDontSee('Hapus juga nilai yang terkait');
 });
+
+it('melewati KRS bernilai final pada hapus massal ketika opsi hapusNilaiTerkait tidak dicentang', function () {
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create();
+    $final = krsBernilai(true, ['id_mahasiswa' => $mahasiswa->id]);
+    $belumFinal = krsBernilai(false, ['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)->test(KrsShow::class, ['id' => $mahasiswa->id])
+        ->set('selected', [(string) $final['krs']->id, (string) $belumFinal['krs']->id])
+        ->call('confirmBulkDelete')
+        ->call('bulkDelete');
+
+    expect(terhapus(Krs::class, $final['krs']->id))->toBeFalse()
+        ->and(terhapus(Nilai::class, $final['nilai']->id))->toBeFalse()
+        ->and(terhapus(Krs::class, $belumFinal['krs']->id))->toBeTrue()
+        ->and(terhapus(Nilai::class, $belumFinal['nilai']->id))->toBeTrue();
+});
+
+it('ikut menghapus KRS bernilai final beserta nilainya pada hapus massal ketika opsi hapusNilaiTerkait dicentang', function () {
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create();
+    $final = krsBernilai(true, ['id_mahasiswa' => $mahasiswa->id]);
+    $belumFinal = krsBernilai(false, ['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)->test(KrsShow::class, ['id' => $mahasiswa->id])
+        ->set('selected', [(string) $final['krs']->id, (string) $belumFinal['krs']->id])
+        ->call('confirmBulkDelete')
+        ->set('hapusNilaiTerkait', true)
+        ->call('bulkDelete')
+        ->assertSet('hapusNilaiTerkait', false);
+
+    foreach ([$final, $belumFinal] as $d) {
+        $waktu = Krs::withTrashed()->find($d['krs']->id)->deleted_at->format('Y-m-d H:i:s');
+        foreach ([[Krs::class, 'krs'], [Nilai::class, 'nilai'], [NilaiKomponen::class, 'komponen'], [NilaiRevisi::class, 'revisi']] as [$kelas, $kunci]) {
+            $baris = $kelas::withTrashed()->find($d[$kunci]->id);
+            expect($baris->trashed())->toBeTrue("{$kunci} seharusnya ikut terhapus")
+                ->and($baris->deleted_at->format('Y-m-d H:i:s'))->toBe($waktu);
+        }
+    }
+});
+
+it('mengabaikan hapusNilaiTerkait yang dipalsukan pada hapus massal untuk admin tanpa hak hapus nilai', function () {
+    config(['access.granular_permissions' => true]);
+
+    $admin = adminUser('admin_akademik');
+    $mahasiswa = Mahasiswa::factory()->create();
+    $final = krsBernilai(true, ['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)->test(KrsShow::class, ['id' => $mahasiswa->id])
+        ->set('selected', [(string) $final['krs']->id])
+        ->call('confirmBulkDelete')
+        ->set('hapusNilaiTerkait', true)
+        ->call('bulkDelete');
+
+    expect(terhapus(Krs::class, $final['krs']->id))->toBeFalse()
+        ->and(terhapus(Nilai::class, $final['nilai']->id))->toBeFalse();
+});
+
+it('menyembunyikan opsi hapus nilai terkait dari modal hapus massal untuk admin tanpa hak hapus nilai', function () {
+    config(['access.granular_permissions' => true]);
+
+    $admin = adminUser('admin_akademik');
+    $mahasiswa = Mahasiswa::factory()->create();
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)->test(KrsShow::class, ['id' => $mahasiswa->id])
+        ->set('selected', [(string) $krs->id])
+        ->call('confirmBulkDelete')
+        ->assertDontSee('Hapus juga nilai yang terkait');
+});

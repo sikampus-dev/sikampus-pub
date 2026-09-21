@@ -409,8 +409,12 @@
                     @if ($ringkasan['hapus'] > 0)
                         <p>
                             <span class="font-medium text-neutral-900">{{ $ringkasan['hapus'] }} KRS</span> akan dihapus
-                            beserta nilai yang belum final, dan masih bisa dipulihkan. KRS yang sudah punya nilai final
-                            akan dilewati.
+                            beserta nilai yang belum final, dan masih bisa dipulihkan.
+                            @if ($hapusNilaiTerkait)
+                                KRS yang sudah punya nilai final ikut dihapus beserta nilainya.
+                            @else
+                                KRS yang sudah punya nilai final akan dilewati.
+                            @endif
                         </p>
                     @endif
                     @if ($ringkasan['permanen'] > 0)
@@ -421,6 +425,26 @@
                         </p>
                     @endif
                 </div>
+
+                @if ($this->bisaHapusNilai())
+                    {{-- .live (bukan wire:model biasa seperti checkbox per-baris di tabel):
+                         paragraf ringkasan di atas ikut berubah tergantung centang ini, jadi
+                         perubahannya harus langsung terlihat, bukan menunggu aksi berikutnya. Cuma
+                         satu checkbox per modal, bukan ratusan per baris, jadi ongkos roundtrip-nya
+                         tidak jadi masalah seperti alasan .live sengaja dihindari di tabel. --}}
+                    <label class="mt-4 flex items-start gap-2 rounded-lg bg-neutral-50 p-3 text-sm text-neutral-700 shadow-border">
+                        <input
+                            type="checkbox"
+                            wire:model.live="hapusNilaiTerkait"
+                            class="mt-0.5 size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
+                        />
+                        <span>
+                            Hapus juga nilai yang terkait
+                            <span class="block text-xs text-neutral-500">Termasuk nilai yang sudah final — tanpa opsi ini, KRS dengan nilai final dilewati (tidak ikut dihapus).</span>
+                        </span>
+                    </label>
+                @endif
+
                 <div class="mt-6 flex justify-end gap-2">
                     <button
                         type="button"
