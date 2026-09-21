@@ -316,6 +316,21 @@
             <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-border-lg">
                 <h3 class="text-base font-semibold text-neutral-900">Hapus KRS?</h3>
                 <p class="mt-2 text-sm text-neutral-600">Tindakan ini tidak dapat dibatalkan.</p>
+
+                @if ($this->bisaHapusNilai())
+                    <label class="mt-4 flex items-start gap-2 rounded-lg bg-neutral-50 p-3 text-sm text-neutral-700 shadow-border">
+                        <input
+                            type="checkbox"
+                            wire:model="hapusNilaiTerkait"
+                            class="mt-0.5 size-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/10"
+                        />
+                        <span>
+                            Hapus juga nilai yang terkait
+                            <span class="block text-xs text-neutral-500">Termasuk nilai yang sudah final — tanpa opsi ini, KRS dengan nilai final tidak bisa dihapus.</span>
+                        </span>
+                    </label>
+                @endif
+
                 <div class="mt-6 flex justify-end gap-2">
                     <button
                         type="button"

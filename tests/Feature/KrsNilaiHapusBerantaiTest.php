@@ -192,3 +192,54 @@ it('tetap mengizinkan mahasiswa membatalkan KRS pending yang hanya punya nilai b
     expect(terhapus(Krs::class, $d['krs']->id))->toBeTrue()
         ->and(terhapus(NilaiKomponen::class, $d['komponen']->id))->toBeTrue();
 });
+
+it('menghapus KRS bernilai final beserta nilainya ketika opsi hapusNilaiTerkait dicentang di halaman detail', function () {
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create();
+    $d = krsBernilai(true, ['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)->test(KrsShow::class, ['id' => $mahasiswa->id])
+        ->call('confirmDelete', $d['krs']->id)
+        ->set('hapusNilaiTerkait', true)
+        ->call('delete')
+        ->assertNotDispatched('hapus-diblokir')
+        ->assertSet('confirmDeleteId', null)
+        ->assertSet('hapusNilaiTerkait', false);
+
+    $waktu = Krs::withTrashed()->find($d['krs']->id)->deleted_at->format('Y-m-d H:i:s');
+    foreach ([[Krs::class, 'krs'], [Nilai::class, 'nilai'], [NilaiKomponen::class, 'komponen'], [NilaiRevisi::class, 'revisi']] as [$kelas, $kunci]) {
+        $baris = $kelas::withTrashed()->find($d[$kunci]->id);
+        expect($baris->trashed())->toBeTrue("{$kunci} seharusnya ikut terhapus")
+            ->and($baris->deleted_at->format('Y-m-d H:i:s'))->toBe($waktu);
+    }
+});
+
+it('mengabaikan hapusNilaiTerkait yang dipalsukan dari admin tanpa hak hapus nilai, tetap menolak hapus KRS bernilai final', function () {
+    config(['access.granular_permissions' => true]);
+
+    $admin = adminUser('admin_akademik');
+    $mahasiswa = Mahasiswa::factory()->create();
+    $d = krsBernilai(true, ['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)->test(KrsShow::class, ['id' => $mahasiswa->id])
+        ->call('confirmDelete', $d['krs']->id)
+        ->set('hapusNilaiTerkait', true)
+        ->call('delete')
+        ->assertDispatched('hapus-diblokir')
+        ->assertSet('confirmDeleteId', null);
+
+    expect(terhapus(Krs::class, $d['krs']->id))->toBeFalse()
+        ->and(terhapus(Nilai::class, $d['nilai']->id))->toBeFalse();
+});
+
+it('menyembunyikan opsi hapus nilai terkait dari admin tanpa hak hapus nilai', function () {
+    config(['access.granular_permissions' => true]);
+
+    $admin = adminUser('admin_akademik');
+    $mahasiswa = Mahasiswa::factory()->create();
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)->test(KrsShow::class, ['id' => $mahasiswa->id])
+        ->call('confirmDelete', $krs->id)
+        ->assertDontSee('Hapus juga nilai yang terkait');
+});

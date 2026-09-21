@@ -7,9 +7,12 @@ use App\Livewire\Admin\Krs\Concerns\ForwardsIndexState;
 use App\Models\Kelas;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
+use App\Models\Nilai;
 use App\Models\Semester;
 use App\Services\PendaftaranKrs;
 use App\Services\UrutanMatkulService;
+use App\Support\PanelAccess;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +29,15 @@ class Show extends Component
     public string $filterSemester = '';
 
     public ?int $confirmDeleteId = null;
+
+    /**
+     * Opsi di modal konfirmasi hapus satuan: kalau dicentang, nilai yang terkait KRS ini ikut
+     * di-soft-delete — termasuk nilai FINAL, yang sebetulnya menahan Krs::delete() lewat
+     * Krs::$hapusDiblokirOleh (lihat hapusKrsBesertaNilai()). Tanpa opsi ini dicentang, perilakunya
+     * tetap seperti sebelumnya: nilai belum final ikut terhapus otomatis lewat AturanHapusBerantai,
+     * nilai final tetap memblokir.
+     */
+    public bool $hapusNilaiTerkait = false;
 
     // Baris yang sudah soft-deleted disembunyikan secara default — dinyalakan lewat toggle supaya
     // admin bisa memulihkan atau menghapusnya permanen. Sama seperti pola di
@@ -347,17 +359,30 @@ class Show extends Component
     public function confirmDelete(int $id): void
     {
         $this->confirmDeleteId = $id;
+        $this->hapusNilaiTerkait = false;
     }
 
     public function cancelDelete(): void
     {
         $this->confirmDeleteId = null;
+        $this->hapusNilaiTerkait = false;
     }
 
     /**
-     * Sama persis dengan KrsController::destroy. Scope sudah dijamin lewat mount() (mahasiswa di
-     * halaman ini sudah dicek), dan where id_mahasiswa di bawah memastikan id yang dikirim dari
-     * client benar-benar milik mahasiswa tsb — bukan sekadar disembunyikan dari tampilan.
+     * Opsi "hapus juga nilai terkait" cuma masuk akal (dan cuma ditampilkan) buat admin yang
+     * memang punya hak hapus nilai — kalau tidak, pengguna KRS bisa diam-diam menghapus nilai lewat
+     * jalur ini walau tombol hapus nilai sendiri di halaman Nilai disembunyikan darinya.
+     */
+    public function bisaHapusNilai(): bool
+    {
+        return PanelAccess::can(Auth::user(), 'nilai', 'delete');
+    }
+
+    /**
+     * Sama persis dengan KrsController::destroy selama $hapusNilaiTerkait tidak dicentang. Scope
+     * sudah dijamin lewat mount() (mahasiswa di halaman ini sudah dicek), dan where id_mahasiswa di
+     * bawah memastikan id yang dikirim dari client benar-benar milik mahasiswa tsb — bukan sekadar
+     * disembunyikan dari tampilan.
      */
     public function delete(): void
     {
@@ -365,13 +390,57 @@ class Show extends Component
             return;
         }
 
-        Krs::where('id', $this->confirmDeleteId)
+        $krs = Krs::where('id', $this->confirmDeleteId)
             ->where('id_mahasiswa', $this->mahasiswaId)
-            ->firstOrFail()
-            ->delete();
+            ->firstOrFail();
+
+        if ($this->hapusNilaiTerkait && $this->bisaHapusNilai()) {
+            $this->hapusKrsBesertaNilai($krs);
+        } else {
+            $krs->delete();
+        }
 
         $this->confirmDeleteId = null;
+        $this->hapusNilaiTerkait = false;
         unset($this->krsList, $this->summary);
+    }
+
+    /**
+     * Tidak ada padanan di KrsController — API belum punya opsi ini, murni fitur panel. Nilai
+     * (final maupun belum final) dihapus DULUAN secara eksplisit, baru KRS-nya — begitu nilai final
+     * sudah tidak lagi "hidup", Krs::$hapusDiblokirOleh (lihat AturanHapusBerantai) tidak lagi
+     * menemukan yang menahan, jadi $krs->delete() yang berikutnya berjalan normal alih-alih
+     * melempar PenghapusanDiblokir.
+     *
+     * deleted_at nilai dan KRS dibekukan ke waktu yang SAMA (pola yang sama dengan
+     * AturanHapusBerantai::hapusAnakBerantai) supaya keduanya tetap dianggap "terhapus bersama" —
+     * begitu KRS ini dipulihkan, nilainya (dan komponen/revisi di bawahnya) ikut pulih lewat
+     * pulihkanAnakBerantai(), bukan tertinggal terhapus sendirian.
+     */
+    private function hapusKrsBesertaNilai(Krs $krs): void
+    {
+        $user = Auth::user();
+        $deletedBy = $user ? ($user->name ?? (string) ($user->email ?? $user->id)) : 'system';
+
+        DB::transaction(function () use ($krs, $deletedBy): void {
+            $jamSebelumnya = Carbon::getTestNow();
+            Carbon::setTestNow(now());
+
+            try {
+                // nilai.id_krs unik (termasuk baris soft-deleted), jadi satu KRS paling banyak
+                // punya satu nilai hidup untuk dihapus di sini.
+                $nilai = Nilai::where('id_krs', $krs->id)->whereNull('deleted_at')->first();
+                if ($nilai) {
+                    $nilai->deleted_by = $deletedBy;
+                    $nilai->save();
+                    $nilai->delete();
+                }
+
+                $krs->delete();
+            } finally {
+                Carbon::setTestNow($jamSebelumnya);
+            }
+        });
     }
 
     /**
