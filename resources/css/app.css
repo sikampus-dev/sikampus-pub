@@ -104,6 +104,12 @@ body {
 .ts-control input {
     color: #171717; /* neutral-900 */
     outline: none;
+    /* CSS bawaan Tom Select (yang sengaja tidak diimpor) menetapkan dua baris ini juga — tanpa
+       flex, <input> memakai lebar bawaan atribut size="1" (~1 karakter) di dalam .ts-control yang
+       flex; ketikan jadi langsung meluber ke baris baru dan seringkali tertutup tinggi kotak yang
+       tetap, membuatnya seolah "tidak terlihat" saat mengetik pencarian. */
+    flex: 1 1 auto;
+    min-width: 4rem;
 }
 
 .ts-control input::placeholder {
@@ -112,6 +118,17 @@ body {
 
 .ts-control .item {
     color: #171717; /* neutral-900 */
+}
+
+/* Tom Select TIDAK menyembunyikan label yang sedang terseleksi begitu kontrol difokus untuk
+   mengetik pencarian (perilaku ini juga tidak ada di CSS bawaannya, hanya didapat lewat plugin
+   dropdown_input) — <div class="item"> lama tetap dirender berdampingan dengan <input>, sehingga
+   ketikan pengguna tertimpa/terhalang teks pilihan sebelumnya. Wrapper.js menambahkan class
+   `input-active` persis saat kontrol difokus (lihat inputState()/refreshState() di tom-select),
+   jadi disembunyikan lewat CSS di sini alih-alih menambah JS baru. Dicakup ke `.single` saja —
+   komponen ini tidak pernah dipakai dalam mode multi-select. */
+.ts-wrapper.single.input-active .ts-control > .item {
+    display: none;
 }
 
 .ts-dropdown {
