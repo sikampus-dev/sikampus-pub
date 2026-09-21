@@ -85,7 +85,7 @@ class Show extends Component
     #[Computed]
     public function mahasiswa()
     {
-        return Mahasiswa::with(['prodi', 'semester_masuk'])->findOrFail($this->mahasiswaId);
+        return Mahasiswa::with(['prodi', 'semester_masuk', 'kelompok_kelas'])->findOrFail($this->mahasiswaId);
     }
 
     /**

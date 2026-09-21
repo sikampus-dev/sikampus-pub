@@ -51,6 +51,8 @@ class Form extends Component
 
     public string $mahasiswaProdiNama = '';
 
+    public string $mahasiswaKelompokKelas = '';
+
     public string $mahasiswaDosenWali = '';
 
     public string $mahasiswaSemesterMasuk = '';
@@ -80,6 +82,7 @@ class Form extends Component
         $krs = Krs::with([
             'mahasiswa.prodi',
             'mahasiswa.semester_masuk',
+            'mahasiswa.kelompok_kelas',
             'kelas.kurikulumMatkul.matkul',
             'kelas.semester',
         ])->findOrFail($id);
@@ -112,6 +115,7 @@ class Form extends Component
         $this->mahasiswaProdiNama = $mahasiswa->prodi
             ? $mahasiswa->prodi->nama.($mahasiswa->prodi->kode ? ' ('.$mahasiswa->prodi->kode.')' : '')
             : '—';
+        $this->mahasiswaKelompokKelas = $mahasiswa->kelompok_kelas->nama ?? '—';
         $this->mahasiswaDosenWali = $dosenWali ?: '—';
         $this->mahasiswaSemesterMasuk = $mahasiswa->semester_masuk
             ? $mahasiswa->semester_masuk->nama.' ('.$mahasiswa->semester_masuk->kode.')'

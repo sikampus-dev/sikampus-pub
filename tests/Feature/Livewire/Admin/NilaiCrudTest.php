@@ -5,6 +5,7 @@ use App\Livewire\Admin\Nilai\Index;
 use App\Livewire\Admin\Nilai\Show;
 use App\Models\Jenjang;
 use App\Models\Kelas;
+use App\Models\KelompokKelas;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
 use App\Models\Matkul;
@@ -43,6 +44,31 @@ it('renders the detail nilai page for a mahasiswa', function () {
         ->get(route('admin.akademik.nilai.show', $mahasiswa->id))
         ->assertOk()
         ->assertSee('Kalkulus Lanjut');
+});
+
+it('menampilkan kelas mahasiswa di kartu informasi mahasiswa pada halaman detail nilai', function () {
+    $admin = adminUser();
+
+    $kelompokKelas = KelompokKelas::factory()->create(['nama' => 'PSCA 24 E']);
+    $mahasiswa = Mahasiswa::factory()->create(['id_kelompok_kelas' => $kelompokKelas->id]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.akademik.nilai.show', $mahasiswa->id))
+        ->assertOk()
+        ->assertSee('PSCA 24 E');
+});
+
+it('menampilkan kelas mahasiswa di kartu informasi mahasiswa pada halaman ubah nilai', function () {
+    $admin = adminUser();
+
+    $kelompokKelas = KelompokKelas::factory()->create(['nama' => 'PSCA 24 F']);
+    $mahasiswa = Mahasiswa::factory()->create(['id_kelompok_kelas' => $kelompokKelas->id]);
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $mahasiswa->id, 'idKrs' => $krs->id])
+        ->assertSet('mahasiswaKelompokKelas', 'PSCA 24 F')
+        ->assertSee('PSCA 24 F');
 });
 
 it('creates a nilai row via the edit form for a krs without existing nilai', function () {

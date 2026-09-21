@@ -61,6 +61,19 @@ it('blocks creating a duplicate krs row for the same mahasiswa and kelas', funct
     expect(Krs::where('id_mahasiswa', $mahasiswa->id)->where('id_kelas', $kelas->id)->count())->toBe(1);
 });
 
+it('menampilkan kelas mahasiswa di kartu detail mahasiswa pada halaman ubah KRS', function () {
+    $admin = adminUser();
+
+    $kelompokKelas = KelompokKelas::factory()->create(['nama' => 'PSCA 24 D']);
+    $mahasiswa = Mahasiswa::factory()->create(['id_kelompok_kelas' => $kelompokKelas->id]);
+    $krs = Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $krs->id])
+        ->assertSet('mahasiswaKelompokKelas', 'PSCA 24 D')
+        ->assertSee('PSCA 24 D');
+});
+
 it('updates a krs row via the edit form', function () {
     $admin = adminUser();
 

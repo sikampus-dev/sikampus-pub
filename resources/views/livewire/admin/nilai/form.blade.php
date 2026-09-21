@@ -32,6 +32,10 @@
                 <p class="font-semibold text-neutral-900">{{ $mahasiswaProdiNama }}</p>
             </div>
             <div>
+                <span class="text-xs font-semibold uppercase text-neutral-500">Kelas Mahasiswa</span>
+                <p class="font-semibold text-neutral-900">{{ $mahasiswaKelompokKelas }}</p>
+            </div>
+            <div>
                 <span class="text-xs font-semibold uppercase text-neutral-500">Mata Kuliah</span>
                 <p class="font-semibold text-neutral-900">{{ $matkulLabel }}</p>
             </div>
