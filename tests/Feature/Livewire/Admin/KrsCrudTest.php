@@ -285,15 +285,17 @@ it('menampilkan kelas mahasiswa di halaman detail KRS', function () {
         ->assertSee('PSCA 24 B');
 });
 
-it('menampilkan kode kelas di tabel detail KRS', function () {
+it('menampilkan kelas mahasiswa (bukan kode kelas) di tabel detail KRS', function () {
     $admin = adminUser();
     $mahasiswa = Mahasiswa::factory()->create();
-    $kelas = Kelas::factory()->create(['kode' => 'BID24']);
-    $tanpaKode = Kelas::factory()->create(['kode' => null]);
+    $kelompokKelas = KelompokKelas::factory()->create(['nama' => 'BIOLOGI 25 A']);
+    $kelas = Kelas::factory()->create(['kode' => 'BID24', 'id_kelompok_kelas' => $kelompokKelas->id]);
+    $tanpaKelompok = Kelas::factory()->create(['kode' => 'BID25', 'id_kelompok_kelas' => null]);
     Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelas->id]);
-    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $tanpaKode->id]);
+    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $tanpaKelompok->id]);
 
     Livewire::actingAs($admin)->test(Show::class, ['id' => $mahasiswa->id])
-        ->assertSeeInOrder(['Mata Kuliah', 'Kode Kelas', 'Semester'])
-        ->assertSee('BID24');
+        ->assertSeeInOrder(['Mata Kuliah', 'Kelas Mahasiswa', 'Semester'])
+        ->assertSee('BIOLOGI 25 A')
+        ->assertDontSee('BID24');
 });

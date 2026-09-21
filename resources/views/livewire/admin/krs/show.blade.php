@@ -187,7 +187,7 @@
                             />
                         </th>
                         <th class="px-4 py-3">Mata Kuliah</th>
-                        <th class="px-4 py-3">Kode Kelas</th>
+                        <th class="px-4 py-3">Kelas Mahasiswa</th>
                         <th class="px-4 py-3">Semester</th>
                         <th class="px-4 py-3 text-center">SKS</th>
                         <th class="px-4 py-3">Dosen Pengampu</th>
@@ -221,7 +221,7 @@
                                     {{ $matkul?->kode ? $matkul->kode.' - ' : '' }}{{ $matkul?->nama ?? '—' }}
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-neutral-600">{{ filled($krs->kelas?->kode) ? $krs->kelas->kode : '—' }}</td>
+                            <td class="px-4 py-3 text-neutral-600">{{ $krs->kelas?->kelompokKelas?->nama ?? '—' }}</td>
                             <td class="px-4 py-3 text-neutral-600">
                                 {{ $krs->kelas?->semester ? $krs->kelas->semester->nama.' ('.$krs->kelas->semester->kode.')' : '—' }}
                             </td>

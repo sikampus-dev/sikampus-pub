@@ -291,6 +291,7 @@ class Show extends Component
             'kelas.prodi',
             'kelas.semester',
             'kelas.dosenPic',
+            'kelas.kelompokKelas',
         ])
             ->where('id_mahasiswa', $this->mahasiswaId);
 
