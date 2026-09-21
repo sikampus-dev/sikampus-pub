@@ -8,9 +8,11 @@ use App\Models\Mahasiswa;
 use App\Models\Prodi;
 use App\Models\Semester;
 use App\Models\StatusAkademik;
+use App\Services\KolomExcelMahasiswa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -23,6 +25,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * masuk, status akademik) disalin ulang dari MahasiswaController::index (bukan di-share), sama
  * seperti NilaiExportController terhadap NilaiController — lihat skill siak-livewire-module.
  * Tidak dipaginasi: seluruh baris yang cocok dengan filter yang sedang dipilih ikut diexport.
+ *
+ * Kolomnya SAMA PERSIS dengan template impor (App\Services\KolomExcelMahasiswa), supaya hasil
+ * ekspor bisa diedit lalu diimpor kembali. Karena itu sheet data sengaja polos: impor membaca
+ * sheet AKTIF dan hanya membuang SATU baris judul, jadi judul laporan, info filter, dan kolom "No"
+ * yang dulu ada di atas tabel akan menggeser seluruh kolom saat diimpor ulang. Info filter dipindah
+ * ke sheet kedua.
  */
 class MahasiswaExportController extends Controller
 {
@@ -34,7 +42,7 @@ class MahasiswaExportController extends Controller
         $semesterMasukId = $request->get('id_semester_masuk') ? (int) $request->get('id_semester_masuk') : null;
         $statusAkademikId = $request->get('id_status_akademik') ? (int) $request->get('id_status_akademik') : null;
 
-        $query = Mahasiswa::with(['prodi', 'kelompok_kelas', 'semester_masuk', 'status_akademik']);
+        $query = Mahasiswa::with(KolomExcelMahasiswa::RELASI);
 
         $user = Auth::user();
         if ($user && $user->hasScopeRestriction()) {
@@ -71,15 +79,48 @@ class MahasiswaExportController extends Controller
         $mahasiswaList = $query->orderBy('nama')->get();
 
         $spreadsheet = new Spreadsheet;
+
+        // ---- Sheet 1: data, identik dengan template impor (judul di baris 1, data mulai baris 2).
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Data Mahasiswa');
 
-        $row = 1;
-        $sheet->setCellValue('A'.$row, 'DATA MAHASISWA');
-        $sheet->mergeCells('A'.$row.':I'.$row);
-        $sheet->getStyle('A'.$row)->getFont()->setBold(true)->setSize(14);
-        $row++;
+        $headers = KolomExcelMahasiswa::HEADER;
+        $sheet->fromArray([$headers], null, 'A1');
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle('A1:'.$lastCol.'1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4472C4']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
 
+        $row = 2;
+        foreach ($mahasiswaList as $mhs) {
+            foreach (KolomExcelMahasiswa::baris($mhs) as $i => $value) {
+                if ($value === null || $value === '') {
+                    continue;
+                }
+
+                $cell = Coordinate::stringFromColumnIndex($i + 1).$row;
+                if (in_array($i, KolomExcelMahasiswa::KOLOM_ANGKA, true)) {
+                    // Tanpa format ribuan: impor membaca nilai yang sudah diformat, dan "5,000,000"
+                    // akan terbaca sebagai 5,0.
+                    $sheet->setCellValue($cell, $value);
+                } else {
+                    $sheet->setCellValueExplicit($cell, (string) $value, DataType::TYPE_STRING);
+                }
+            }
+            $row++;
+        }
+
+        for ($i = 1; $i <= count($headers); $i++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i))->setWidth(20);
+        }
+        $sheet->freezePane('C2');
+        if ($row > 2) {
+            $sheet->setAutoFilter('A1:'.$lastCol.($row - 1));
+        }
+
+        // ---- Sheet 2: info ekspor (dulu di atas tabel data).
         $filterLines = [
             'Pencarian' => $search ?: null,
             'Prodi' => $prodiId ? Prodi::find($prodiId)?->nama : null,
@@ -89,62 +130,22 @@ class MahasiswaExportController extends Controller
         ];
         $filterLabel = collect($filterLines)->filter()->map(fn ($v, $k) => "{$k}: {$v}")->implode(' | ');
 
-        $sheet->setCellValue('A'.$row, 'Filter:');
-        $sheet->setCellValue('B'.$row, $filterLabel !== '' ? $filterLabel : 'Semua data (tanpa filter)');
-        $row++;
+        $info = $spreadsheet->createSheet();
+        $info->setTitle('Info Export');
+        $info->fromArray([
+            ['DATA MAHASISWA'],
+            ['Filter:', $filterLabel !== '' ? $filterLabel : 'Semua data (tanpa filter)'],
+            ['Tanggal Export:', date('d/m/Y H:i:s')],
+            ['Total Data:', $mahasiswaList->count()],
+            [],
+            ['Catatan:', "Sheet 'Data Mahasiswa' memakai format yang sama dengan template impor, sehingga bisa diedit lalu diimpor kembali. Baris dengan NIM yang sudah ada akan memperbarui data mahasiswa tersebut."],
+        ], null, 'A1');
+        $info->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+        $info->getColumnDimension('A')->setWidth(18);
+        $info->getColumnDimension('B')->setWidth(90);
 
-        $sheet->setCellValue('A'.$row, 'Tanggal Export:');
-        $sheet->setCellValue('B'.$row, date('d/m/Y H:i:s'));
-        $row++;
-
-        $sheet->setCellValue('A'.$row, 'Total Data:');
-        $sheet->setCellValue('B'.$row, $mahasiswaList->count());
-        $row += 2;
-
-        $headers = ['No', 'NIM', 'Nama', 'Email', 'No. WA', 'Prodi', 'Kelas Mahasiswa', 'Semester Masuk', 'Status Akademik'];
-        $sheet->fromArray([$headers], null, 'A'.$row);
-
-        $headerStyle = [
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4472C4']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
-        ];
-        $lastHeaderCol = Coordinate::stringFromColumnIndex(count($headers));
-        $sheet->getStyle('A'.$row.':'.$lastHeaderCol.$row)->applyFromArray($headerStyle);
-
-        $headerRow = $row;
-        $row++;
-        $no = 1;
-        foreach ($mahasiswaList as $mhs) {
-            $sheet->setCellValue('A'.$row, $no);
-            $sheet->setCellValue('B'.$row, $mhs->nim ?? '-');
-            $sheet->setCellValue('C'.$row, $mhs->nama);
-            $sheet->setCellValue('D'.$row, $mhs->email ?? '-');
-            $sheet->setCellValue('E'.$row, $mhs->no_wa ?? '-');
-            $sheet->setCellValue('F'.$row, $mhs->prodi?->nama ?? '-');
-            $sheet->setCellValue('G'.$row, $mhs->kelompok_kelas?->nama ?? '-');
-            $sheet->setCellValue('H'.$row, $mhs->semester_masuk?->nama ?? '-');
-            $sheet->setCellValue('I'.$row, $mhs->status_akademik?->nama ?? '-');
-
-            $sheet->getStyle('A'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-            $row++;
-            $no++;
-        }
-
-        $sheet->getColumnDimension('A')->setWidth(6);
-        $sheet->getColumnDimension('B')->setWidth(18);
-        $sheet->getColumnDimension('C')->setWidth(30);
-        $sheet->getColumnDimension('D')->setWidth(28);
-        $sheet->getColumnDimension('E')->setWidth(16);
-        $sheet->getColumnDimension('F')->setWidth(25);
-        $sheet->getColumnDimension('G')->setWidth(20);
-        $sheet->getColumnDimension('H')->setWidth(18);
-        $sheet->getColumnDimension('I')->setWidth(16);
-
-        if ($row > $headerRow + 1) {
-            $sheet->setAutoFilter('A'.$headerRow.':'.$lastHeaderCol.($row - 1));
-        }
+        // Impor membaca sheet AKTIF — pastikan yang aktif adalah sheet data, bukan sheet info.
+        $spreadsheet->setActiveSheetIndex(0);
 
         $filename = 'mahasiswa_'.date('YmdHis').'.xlsx';
 

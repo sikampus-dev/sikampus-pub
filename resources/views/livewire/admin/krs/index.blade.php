@@ -96,12 +96,14 @@
             </div>
         @endif
 
-        {{-- wire:target menyebut nama properti filter/pencarian secara eksplisit, bukan dibiarkan
-             kosong: kalau kosong, wire:loading ikut menyala untuk request LAIN dari komponen ini
-             (mis. pagination), padahal yang diminta cuma indikator untuk filter dan pencarian. --}}
+        {{-- wire:target menyebut nama properti filter/pencarian DAN method pagination secara
+             eksplisit, bukan dibiarkan kosong: kalau kosong, wire:loading ikut menyala untuk
+             request LAIN dari komponen ini yang tidak diminta indikatornya. gotoPage/previousPage/
+             nextPage adalah method yang dipanggil tombol pagination bawaan Livewire (lihat
+             resources/views/vendor/livewire/tailwind.blade.php). --}}
         <div
             wire:loading.flex
-            wire:target="search, filterProdi, filterSemester, filterStatusPengajuan"
+            wire:target="search, filterProdi, filterSemester, filterStatusPengajuan, gotoPage, previousPage, nextPage"
             class="items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-medium text-neutral-500"
         >
             <i data-lucide="loader-2" class="h-3.5 w-3.5 animate-spin" aria-hidden="true"></i>
@@ -111,7 +113,7 @@
         <div
             class="overflow-x-auto"
             wire:loading.class="opacity-50 pointer-events-none"
-            wire:target="search, filterProdi, filterSemester, filterStatusPengajuan"
+            wire:target="search, filterProdi, filterSemester, filterStatusPengajuan, gotoPage, previousPage, nextPage"
         >
             <table class="w-full text-left text-sm">
                 <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">

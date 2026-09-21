@@ -137,10 +137,10 @@ it('redirects unauthenticated users to the login page', function () {
     $this->get(route('admin.akademik.nilai'))->assertRedirect(route('login'));
 });
 
-it('shows a loading indicator scoped to the search/filter fields on the index page', function () {
+it('shows a loading indicator scoped to the search/filter fields and pagination on the index page', function () {
     Livewire::actingAs(adminUser())
         ->test(Index::class)
-        ->assertSee('wire:target="search, filterProdi, filterSemesterMasuk"', escape: false);
+        ->assertSee('wire:target="search, filterProdi, filterSemesterMasuk, gotoPage, previousPage, nextPage"', escape: false);
 });
 
 it('shows a loading indicator scoped to the search/filter/toggle fields on the show page', function () {

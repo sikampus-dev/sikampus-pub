@@ -629,62 +629,9 @@ class MahasiswaController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Set header
-        $headers = [
-            'Nama*',
-            'NIM',
-            'Email',
-            'No. HP',
-            'Handphone',
-            'Jenis Kelamin (L/P)',
-            'ID Tempat Lahir (string kode kota/wilayah; sesuai kolom di form mahasiswa)',
-            'Tanggal Lahir (YYYY-MM-DD atau tanggal Excel)',
-            'No. KTP',
-            'Status Akademik (Nama)',
-            'Alamat',
-            'RT',
-            'RW',
-            'Dusun',
-            'Kelurahan',
-            'Kode Pos',
-            'ID Kecamatan (string kode wilayah; bukan nama teks)',
-            'Negara (Nama Negara)',
-            'Provinsi (Nama Provinsi)',
-            'Kota (Nama Kota)',
-            'Kode Prodi*',
-            'Kelas Mahasiswa (Nama)',
-            'Kode Semester Masuk',
-            'Jalur Masuk (Nama Jalur)',
-            'Jenis Daftar (Nama Jenis)',
-            'Mulai Semester',
-            'SKS Diakui',
-            'Sekolah Asal',
-            'NIS',
-            'NISN',
-            'NPWP',
-            'Nama Ayah',
-            'NIK Ayah',
-            'Tanggal Lahir Ayah (YYYY-MM-DD)',
-            'Pendidikan Ayah (Nama)',
-            'Pekerjaan Ayah (Nama)',
-            'Penghasilan Ayah (Nama)',
-            'Nama Ibu',
-            'NIK Ibu',
-            'Tanggal Lahir Ibu (YYYY-MM-DD)',
-            'Pendidikan Ibu (Nama)',
-            'Pekerjaan Ibu (Nama)',
-            'Penghasilan Ibu (Nama)',
-            'Nama Wali',
-            'NIK Wali',
-            'Tanggal Lahir Wali (YYYY-MM-DD)',
-            'Pendidikan Wali (Nama)',
-            'Pekerjaan Wali (Nama)',
-            'Penghasilan Wali (Nama)',
-            'Jumlah Biaya Masuk',
-            'Penerima KPS',
-            'No. KPS',
-            'Foto (path relatif di storage disk public; file harus sudah diunggah ke server, contoh: mahasiswa/foto/nama_file.jpg)',
-        ];
+        // Set header — satu sumber dengan ekspor (Web\MahasiswaExportController), supaya file
+        // ekspor bisa langsung diimpor kembali. Lihat App\Services\KolomExcelMahasiswa.
+        $headers = \App\Services\KolomExcelMahasiswa::HEADER;
 
         $sheet->fromArray([$headers], null, 'A1');
 

@@ -21,6 +21,12 @@ it('renders as a full page with searchable-select filters', function () {
         ->assertSee('x-data', false);
 });
 
+it('shows a loading indicator scoped to the search/filter/toggle fields and pagination on the index page', function () {
+    Livewire::actingAs(adminUser())
+        ->test(Index::class)
+        ->assertSee('wire:target="search, filterProdi, filterKelompokKelas, filterSemesterMasuk, filterStatusAkademik, showTrashed, gotoPage, previousPage, nextPage"', escape: false);
+});
+
 it('scopes the kelas mahasiswa filter options to the selected prodi', function () {
     $admin = adminUser();
     $prodiA = Prodi::factory()->create();
