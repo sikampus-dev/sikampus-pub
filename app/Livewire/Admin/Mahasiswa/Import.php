@@ -488,7 +488,10 @@ class Import extends Component
                 'line' => $e->getLine(),
             ]);
 
-            $this->addError('file', 'Terjadi kesalahan saat mengimport data! Harap periksa kembali data yang diimport.');
+            // Sama seperti MahasiswaController::import dan komponen import lain (Kelas Mahasiswa,
+            // Kota, Negara, Provinsi, dst) — pesan exception ditampilkan langsung, bukan disamarkan
+            // jadi pesan generik, supaya admin tahu penyebab pastinya tanpa buka log server.
+            $this->addError('file', 'Terjadi kesalahan saat mengimport data: '.$e->getMessage());
         }
 
         $this->processing = false;

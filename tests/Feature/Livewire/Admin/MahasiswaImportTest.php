@@ -113,6 +113,28 @@ it('skips a row with an empty nama and records the error', function () {
     expect(Mahasiswa::where('nim', '2024111004')->exists())->toBeFalse();
 });
 
+it('shows the underlying exception message instead of a generic one when the import fails', function () {
+    $admin = adminUser();
+
+    // 'nim' adalah string(255) di migration — nilai yang jauh melebihi itu memicu
+    // QueryException sungguhan (data too long) dari MySQL, tanpa perlu mock apa pun.
+    $file = makeMahasiswaImportFile([
+        ['Nama Gagal', str_repeat('9', 300)],
+    ]);
+
+    $component = Livewire::actingAs($admin)
+        ->test(Import::class)
+        ->set('file', $file)
+        ->call('import')
+        ->assertHasErrors('file');
+
+    expect(Mahasiswa::where('nama', 'Nama Gagal')->exists())->toBeFalse();
+
+    $errorMessage = $component->errors()->first('file');
+    expect($errorMessage)->toStartWith('Terjadi kesalahan saat mengimport data: ');
+    expect($errorMessage)->not->toBe('Terjadi kesalahan saat mengimport data! Harap periksa kembali data yang diimport.');
+});
+
 it('resolves prodi kode and status akademik nama to their ids', function () {
     $admin = adminUser();
     $prodi = Prodi::factory()->create(['kode' => 'TI']);

@@ -1273,8 +1273,10 @@ class MahasiswaController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Terjadi kesalahan saat mengimport data! Harap periksa kembali data yang diimport.',
-                'debug' => config('app.debug') ? $e->getMessage() : null,
+                // Sama seperti controller import lain (Kelas, Kota, Negara, Provinsi, dst) — pesan
+                // exception ditampilkan langsung, bukan disamarkan jadi pesan generik, supaya admin
+                // tahu penyebab pastinya tanpa harus membuka storage/logs/laravel.log.
+                'message' => 'Terjadi kesalahan saat mengimport data: '.$e->getMessage(),
             ], 500);
         }
     }
