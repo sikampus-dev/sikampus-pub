@@ -44,6 +44,8 @@ class Form extends Component
 
     public string $nis = '';
 
+    public string $nisn = '';
+
     public string $alamat = '';
 
     public string $rt = '';
@@ -120,6 +122,7 @@ class Form extends Component
         $this->no_ktp = (string) $mahasiswa->no_ktp;
         $this->sekolah_asal = (string) $mahasiswa->sekolah_asal;
         $this->nis = (string) $mahasiswa->nis;
+        $this->nisn = (string) $mahasiswa->nisn;
         $this->alamat = (string) $mahasiswa->alamat;
         $this->rt = (string) $mahasiswa->rt;
         $this->rw = (string) $mahasiswa->rw;
@@ -159,7 +162,7 @@ class Form extends Component
      * 'sometimes' karena request-nya bisa parsial; form ini selalu mengirim seluruh field, jadi
      * efeknya sama dengan 'required'.
      *
-     * Field akademik (prodi, status akademik, jalur masuk) serta NISN/NPWP/KPS sengaja TIDAK ada
+     * Field akademik (prodi, status akademik, jalur masuk) serta NPWP/KPS sengaja TIDAK ada
      * di sini: API pun tidak mengizinkan mahasiswa mengubahnya lewat self-service.
      */
     public function save()
@@ -188,6 +191,7 @@ class Form extends Component
             'no_ktp' => ['nullable', 'string', 'max:20'],
             'sekolah_asal' => ['nullable', 'string', 'max:255'],
             'nis' => ['nullable', 'string', 'max:50'],
+            'nisn' => ['nullable', 'string', 'max:50'],
             'rt' => ['nullable', 'string', 'max:10'],
             'rw' => ['nullable', 'string', 'max:10'],
             'dusun' => ['nullable', 'string', 'max:100'],

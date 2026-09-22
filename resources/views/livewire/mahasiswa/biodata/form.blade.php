@@ -79,7 +79,7 @@
     <div class="rounded-2xl bg-white p-6 shadow-border">
         <h3 class="mb-4 text-sm font-semibold text-neutral-900">Asal Sekolah</h3>
         <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div>
+            <div class="sm:col-span-2">
                 <label class="mb-1.5 block text-sm font-medium text-neutral-700">Sekolah Asal</label>
                 <input type="text" wire:model="sekolah_asal" class="{{ $inputClass }} @error('sekolah_asal') ring-2 ring-red-500 @enderror" />
                 @error('sekolah_asal') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
@@ -89,6 +89,12 @@
                 <label class="mb-1.5 block text-sm font-medium text-neutral-700">NIS</label>
                 <input type="text" wire:model="nis" class="{{ $inputClass }} @error('nis') ring-2 ring-red-500 @enderror" />
                 @error('nis') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label class="mb-1.5 block text-sm font-medium text-neutral-700">NISN</label>
+                <input type="text" wire:model="nisn" class="{{ $inputClass }} @error('nisn') ring-2 ring-red-500 @enderror" />
+                @error('nisn') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
         </div>
     </div>

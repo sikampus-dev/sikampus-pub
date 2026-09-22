@@ -522,6 +522,7 @@ class MahasiswaController extends Controller
             // self-service dan jalur admin memvalidasi kolom yang sama dengan cara yang sama.
             'sekolah_asal' => ['nullable', 'string', 'max:255'],
             'nis' => ['nullable', 'string', 'max:50'],
+            'nisn' => ['nullable', 'string', 'max:50'],
             'ayah' => ['nullable', 'string', 'max:255'],
             'nik_ayah' => ['nullable', 'string', 'max:20'],
             'tgl_lahir_ayah' => ['nullable', 'date'],

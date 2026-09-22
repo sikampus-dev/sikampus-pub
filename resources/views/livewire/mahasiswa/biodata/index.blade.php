@@ -99,7 +99,7 @@
     @endforeach
 
     <p class="px-1 text-xs text-neutral-500">
-        Data akademik serta NISN, NPWP, dan KPS dikelola oleh bagian administrasi. Hubungi
+        Data akademik serta NPWP dan KPS dikelola oleh bagian administrasi. Hubungi
         administrasi bila ada yang perlu diperbaiki.
     </p>
 </div>

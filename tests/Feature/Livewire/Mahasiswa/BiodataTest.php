@@ -159,15 +159,17 @@ it('rejects an email already used by another mahasiswa', function () {
         ->assertHasErrors(['email']);
 });
 
-it('prefills and saves the sekolah asal and nis fields', function () {
-    [$user, $mahasiswa] = biodataMahasiswaUser(['sekolah_asal' => 'SMAN 2 Lama', 'nis' => '9911']);
+it('prefills and saves the sekolah asal, nis, and nisn fields', function () {
+    [$user, $mahasiswa] = biodataMahasiswaUser(['sekolah_asal' => 'SMAN 2 Lama', 'nis' => '9911', 'nisn' => '0012345678']);
 
     Livewire::actingAs($user)
         ->test(BiodataForm::class)
         ->assertSet('sekolah_asal', 'SMAN 2 Lama')
         ->assertSet('nis', '9911')
+        ->assertSet('nisn', '0012345678')
         ->set('sekolah_asal', 'SMAN 5 Baru')
         ->set('nis', '20250099')
+        ->set('nisn', '0098765432')
         ->call('save')
         ->assertHasNoErrors()
         ->assertRedirect(route('mahasiswa.biodata'));
@@ -175,17 +177,20 @@ it('prefills and saves the sekolah asal and nis fields', function () {
     $mahasiswa->refresh();
     expect($mahasiswa->sekolah_asal)->toBe('SMAN 5 Baru');
     expect($mahasiswa->nis)->toBe('20250099');
+    // NISN diawali nol — pastikan tersimpan sebagai string, bukan angka yang kehilangan nol depan.
+    expect($mahasiswa->nisn)->toBe('0098765432');
 });
 
-it('rejects a sekolah asal or nis longer than the column allows', function () {
+it('rejects a sekolah asal, nis, or nisn longer than the column allows', function () {
     [$user] = biodataMahasiswaUser();
 
     Livewire::actingAs($user)
         ->test(BiodataForm::class)
         ->set('sekolah_asal', str_repeat('a', 256))
         ->set('nis', str_repeat('9', 51))
+        ->set('nisn', str_repeat('9', 51))
         ->call('save')
-        ->assertHasErrors(['sekolah_asal', 'nis']);
+        ->assertHasErrors(['sekolah_asal', 'nis', 'nisn']);
 });
 
 it('saves orang tua and wali data, including the parent name fields', function () {
