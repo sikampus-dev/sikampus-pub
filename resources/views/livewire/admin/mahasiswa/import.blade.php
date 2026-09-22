@@ -40,6 +40,7 @@
             <li>Isi data mengikuti kolom pada baris pertama template — kolom bertanda <span class="font-semibold">*</span> wajib diisi.</li>
             <li>Kolom yang merujuk ke data lain (Prodi, Kelas Mahasiswa, Status Akademik, dst) dicocokkan lewat nama/kode — kalau tidak ditemukan, baris tetap disimpan dengan kolom itu kosong dan dicatat sebagai peringatan.</li>
             <li>NIM yang sudah terdaftar akan memperbarui data mahasiswa yang ada, bukan membuat duplikat.</li>
+            <li>Kolom Foto bersifat opsional dan diisi dengan path relatif file yang <span class="font-semibold">sudah diunggah lebih dulu</span> ke storage server (bukan URL atau file baru) — kalau path-nya tidak ditemukan, baris tetap disimpan dengan Foto kosong dan dicatat sebagai peringatan.</li>
             <li>Upload file (.xlsx atau .xls, maks 10MB) lalu klik "Proses Import".</li>
         </ol>
     </div>
