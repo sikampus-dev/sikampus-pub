@@ -6,6 +6,7 @@ use App\Livewire\Admin\Pengguna\Show;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserRole;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 it('renders index and create form as full pages', function () {
@@ -311,6 +312,51 @@ it('keeps the email verified when an active pengguna is deactivated', function (
 
     expect($pengguna->fresh()->email_verified_at)->not->toBeNull();
     expect($pengguna->fresh()->status)->toBe('inactive');
+});
+
+it('revokes existing sanctum tokens and sessions when a pengguna is deactivated', function () {
+    $admin = adminUser();
+    $pengguna = User::factory()->create(['role' => 'dosen', 'status' => 'active']);
+    $pengguna->createToken('auth_token');
+    DB::table('sessions')->insert([
+        'id' => 'stale-session-id',
+        'user_id' => $pengguna->id,
+        'payload' => 'irrelevant',
+        'last_activity' => now()->timestamp,
+    ]);
+
+    expect($pengguna->tokens()->count())->toBe(1);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $pengguna->id])
+        ->set('status', 'inactive')
+        ->call('save')
+        ->assertRedirect(route('admin.pengguna.show', $pengguna->id));
+
+    expect($pengguna->tokens()->count())->toBe(0);
+    expect(DB::table('sessions')->where('user_id', $pengguna->id)->exists())->toBeFalse();
+});
+
+it('does not touch tokens or sessions when a pengguna stays active', function () {
+    $admin = adminUser();
+    $pengguna = User::factory()->create(['role' => 'dosen', 'status' => 'active']);
+    $pengguna->createToken('auth_token');
+    DB::table('sessions')->insert([
+        'id' => 'still-valid-session-id',
+        'user_id' => $pengguna->id,
+        'payload' => 'irrelevant',
+        'last_activity' => now()->timestamp,
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $pengguna->id])
+        ->set('name', $pengguna->name)
+        ->set('status', 'active')
+        ->call('save')
+        ->assertRedirect(route('admin.pengguna.show', $pengguna->id));
+
+    expect($pengguna->tokens()->count())->toBe(1);
+    expect(DB::table('sessions')->where('user_id', $pengguna->id)->exists())->toBeTrue();
 });
 
 it('shows the email verification badge on the index table', function () {

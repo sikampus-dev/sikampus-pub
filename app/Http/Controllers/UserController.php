@@ -211,6 +211,12 @@ class UserController extends Controller
 
         $user->update($validated);
 
+        // Sama seperti App\Livewire\Admin\Pengguna\Form::save() — menonaktifkan akun harus
+        // berlaku seketika, bukan cuma mencegah login baru. Lihat User::revokeAccess().
+        if (($validated['status'] ?? null) === 'inactive') {
+            $user->revokeAccess();
+        }
+
         return response()->json($user);
     }
 

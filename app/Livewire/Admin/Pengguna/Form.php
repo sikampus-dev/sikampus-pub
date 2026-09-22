@@ -228,6 +228,15 @@ class Form extends Component
 
             $pengguna->update($validated);
 
+            // Menonaktifkan akun harus berlaku SEKETIKA, bukan cuma mencegah login baru — token
+            // API/sesi web yang sudah terlanjur diterbitkan sebelum ini tetap valid sampai
+            // kedaluwarsa sendiri kalau tidak dicabut di sini. Dipanggil tanpa syarat setiap kali
+            // status tersimpan 'inactive' (bukan hanya saat transisi dari active) supaya tidak ada
+            // celah kalau ada token/sesi baru sempat terbit sebelum baris ini jalan.
+            if ($validated['status'] === 'inactive') {
+                $pengguna->revokeAccess();
+            }
+
             session()->flash('status', 'Data pengguna berhasil diperbarui.');
 
             return redirect()->route('admin.pengguna.show', $this->penggunaId);

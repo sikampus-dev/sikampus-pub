@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -361,5 +362,22 @@ class User extends Authenticatable
             'mahasiswa' => 'mahasiswa.dashboard',
             default => null,
         };
+    }
+
+    /**
+     * Cabut semua akses yang sudah terlanjur ada — token Sanctum (API) dan sesi web (database
+     * session driver) — supaya menonaktifkan akun (status = inactive) benar-benar berlaku
+     * seketika, bukan cuma mencegah login BARU. Tanpa ini, token/sesi yang sudah diterbitkan
+     * sebelum akun dinonaktifkan tetap valid sampai kedaluwarsa sendiri atau logout manual.
+     *
+     * Dipanggil dari App\Livewire\Admin\Pengguna\Form::save() dan
+     * App\Http\Controllers\UserController::update() setiap kali status disimpan sebagai
+     * 'inactive' — lihat catatan lengkap di kedua tempat itu.
+     */
+    public function revokeAccess(): void
+    {
+        $this->tokens()->delete();
+
+        DB::table('sessions')->where('user_id', $this->id)->delete();
     }
 }
