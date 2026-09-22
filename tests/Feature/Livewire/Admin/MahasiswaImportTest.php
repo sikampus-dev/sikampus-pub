@@ -97,6 +97,53 @@ it('updates the existing mahasiswa instead of duplicating when the nim already e
     expect($existing->fresh()->nama)->toBe('Nama Baru');
 });
 
+it('skips the row instead of failing with a duplicate nim error when the nim belongs to a soft-deleted mahasiswa', function () {
+    $admin = adminUser();
+    $existing = Mahasiswa::factory()->create(['nim' => '2024111020', 'nama' => 'Nama Lama Terhapus']);
+    $existing->delete();
+    expect(Mahasiswa::where('nim', '2024111020')->exists())->toBeFalse();
+
+    $file = makeMahasiswaImportFile([
+        ['Nama Baru', '2024111020'],
+    ]);
+
+    $component = Livewire::actingAs($admin)
+        ->test(Import::class)
+        ->set('file', $file)
+        ->call('import')
+        ->assertSet('result.success_count', 0)
+        ->assertSet('result.skip_count', 1);
+
+    // Tidak dipulihkan, tidak diperbarui, dan tidak ada baris baru yang dibuat — baris itu murni dilewati.
+    expect(Mahasiswa::withTrashed()->where('nim', '2024111020')->count())->toBe(1);
+    $stillTrashed = $existing->fresh();
+    expect($stillTrashed->trashed())->toBeTrue();
+    expect($stillTrashed->nama)->toBe('Nama Lama Terhapus');
+
+    expect($component->get('result')['errors'])->toContain("Baris 2: NIM '2024111020' sudah ada di sistem tapi datanya sudah dihapus (soft-deleted), baris dilewati.");
+});
+
+it('does not fail with a duplicate email error when the email belongs to a soft-deleted mahasiswa', function () {
+    $admin = adminUser();
+    $existing = Mahasiswa::factory()->create(['email' => 'dihapus@example.test']);
+    $existing->delete();
+
+    $file = makeMahasiswaImportFile([
+        ['Mahasiswa Baru', '2024111021', 'dihapus@example.test'],
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Import::class)
+        ->set('file', $file)
+        ->call('import')
+        ->assertSet('result.success_count', 1);
+
+    $baru = Mahasiswa::where('nim', '2024111021')->firstOrFail();
+    // Email tetap milik baris yang sudah di-soft-delete — bukan record baru ini —
+    // jadi disimpan kosong, konsisten dengan perlakuan email duplikat lain (bukan by-NIM).
+    expect($baru->email)->toBeNull();
+});
+
 it('skips a row with an empty nama and records the error', function () {
     $admin = adminUser();
     $file = makeMahasiswaImportFile([

@@ -142,10 +142,24 @@ class Import extends Component
                     continue;
                 }
 
+                // NIM: jika duplikat dan mahasiswanya masih aktif, lakukan UPDATE record yang ada
+                // (bukan null/skip). withTrashed() wajib dipakai untuk PENCARIANNYA — nim tetap
+                // terikat unique index DB walau mahasiswanya sudah di-soft-delete, jadi kalau
+                // pencarian ini mengabaikan yang terhapus, baris akan dicoba di-INSERT ulang dan
+                // gagal dengan "Duplicate entry" alih-alih ditangani dengan benar. Tapi kalau yang
+                // ditemukan itu TERNYATA sudah di-soft-delete, baris dilewati (skip) — tidak
+                // dipulihkan otomatis, supaya pemulihan data yang sengaja dihapus tetap keputusan
+                // admin lewat halaman Mahasiswa, bukan efek samping import.
                 $nimValue = ! empty($data['nim']) ? trim($data['nim']) : null;
                 $mahasiswaToUpdate = null;
                 if ($nimValue !== null) {
-                    $existingByNim = Mahasiswa::where('nim', $nimValue)->first();
+                    $existingByNim = Mahasiswa::withTrashed()->where('nim', $nimValue)->first();
+                    if ($existingByNim && $existingByNim->trashed()) {
+                        $errors[] = "Baris {$rowNumber}: NIM '{$nimValue}' sudah ada di sistem tapi datanya sudah dihapus (soft-deleted), baris dilewati.";
+                        $skipCount++;
+
+                        continue;
+                    }
                     if ($existingByNim) {
                         $mahasiswaToUpdate = $existingByNim;
                         $errors[] = "Baris {$rowNumber}: NIM '{$nimValue}' sudah ada di sistem, data diperbarui.";
@@ -157,9 +171,10 @@ class Import extends Component
                     }
                 }
 
+                // Email: withTrashed() dengan alasan yang sama seperti NIM di atas.
                 $emailValue = ! empty($data['email']) ? trim($data['email']) : null;
                 if ($emailValue !== null) {
-                    $emailExistsQuery = Mahasiswa::where('email', $emailValue);
+                    $emailExistsQuery = Mahasiswa::withTrashed()->where('email', $emailValue);
                     if ($mahasiswaToUpdate !== null) {
                         $emailExistsQuery->where('id', '!=', $mahasiswaToUpdate->id);
                     }
