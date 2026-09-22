@@ -68,15 +68,26 @@
                             <i data-lucide="lock" class="h-4 w-4 text-neutral-500" aria-hidden="true"></i>
                             Kata sandi
                         </label>
-                        <input
-                            id="password"
-                            name="password"
-                            type="password"
-                            required
-                            autocomplete="current-password"
-                            class="w-full rounded-lg bg-white px-3 py-2.5 text-neutral-900 shadow-border outline-none ring-neutral-900 transition placeholder:text-neutral-400 focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 @error('password') ring-2 ring-red-500 @enderror"
-                            placeholder="••••••••"
-                        />
+                        <div class="relative">
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                required
+                                autocomplete="current-password"
+                                class="w-full rounded-lg bg-white px-3 py-2.5 pr-10 text-neutral-900 shadow-border outline-none ring-neutral-900 transition placeholder:text-neutral-400 focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 @error('password') ring-2 ring-red-500 @enderror"
+                                placeholder="••••••••"
+                            />
+                            <button
+                                type="button"
+                                id="toggle-password"
+                                aria-label="Tampilkan kata sandi"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 transition hover:text-neutral-600"
+                            >
+                                <i data-lucide="eye" class="h-4 w-4" aria-hidden="true"></i>
+                                <i data-lucide="eye-off" class="hidden h-4 w-4" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         @error('password')
                             <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p>
                         @enderror
@@ -109,4 +120,16 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.getElementById('toggle-password').addEventListener('click', function () {
+        var input = document.getElementById('password');
+        var willShow = input.type === 'password';
+        input.type = willShow ? 'text' : 'password';
+        this.querySelectorAll('svg, i').forEach(function (icon) {
+            icon.classList.toggle('hidden');
+        });
+        this.setAttribute('aria-label', willShow ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi');
+    });
+</script>
 @endsection
