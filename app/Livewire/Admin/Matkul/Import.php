@@ -219,7 +219,7 @@ class Import extends Component
                 'line' => $e->getLine(),
             ]);
 
-            $this->addError('file', 'Terjadi kesalahan saat mengimport data! Harap periksa kembali data yang diimport.');
+            $this->addError('file', 'Terjadi kesalahan saat mengimport data: '.$e->getMessage());
         }
 
         $this->processing = false;

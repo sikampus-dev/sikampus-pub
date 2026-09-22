@@ -141,6 +141,28 @@ it('records an error when kode prodi cannot be found', function () {
     expect(Matkul::where('kode', 'MK300')->exists())->toBeFalse();
 });
 
+it('shows the underlying exception message instead of a generic one when the import fails', function () {
+    $admin = adminUser();
+
+    // 'nama' adalah string(255) di migration — nilai yang jauh melebihi itu memicu
+    // QueryException sungguhan (data too long) dari MySQL, tanpa perlu mock apa pun.
+    $file = makeMatkulImportFile([
+        ['MK-GAGAL', str_repeat('a', 300)],
+    ]);
+
+    $component = Livewire::actingAs($admin)
+        ->test(Import::class)
+        ->set('file', $file)
+        ->call('import')
+        ->assertHasErrors('file');
+
+    expect(Matkul::where('kode', 'MK-GAGAL')->exists())->toBeFalse();
+
+    $errorMessage = $component->errors()->first('file');
+    expect($errorMessage)->toStartWith('Terjadi kesalahan saat mengimport data: ');
+    expect($errorMessage)->not->toBe('Terjadi kesalahan saat mengimport data! Harap periksa kembali data yang diimport.');
+});
+
 it('redirects unauthenticated users to the login page', function () {
     $this->get(route('admin.akademik.matkul.import'))
         ->assertRedirect(route('login'));

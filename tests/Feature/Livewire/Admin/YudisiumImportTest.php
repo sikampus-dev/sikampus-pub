@@ -244,6 +244,30 @@ it('processes multiple rows independently, isolating one bad row from the rest',
     expect(Yudisium::count())->toBe(2);
 });
 
+it('shows the underlying exception message instead of a generic one when the import fails', function () {
+    $admin = adminUser();
+    Mahasiswa::factory()->create(['nim' => '2024000099']);
+    JenisKeluar::factory()->create(['nama' => 'Lulus Gagal']);
+
+    // 'no_ijazah' adalah string(255) di migration — nilai yang jauh melebihi itu memicu
+    // QueryException sungguhan (data too long) dari MySQL, tanpa perlu mock apa pun.
+    $file = makeYudisiumImportFile([
+        ['2024000099', 'Lulus Gagal', '', str_repeat('9', 300)],
+    ]);
+
+    $component = Livewire::actingAs($admin)
+        ->test(Import::class)
+        ->set('file', $file)
+        ->call('import')
+        ->assertHasErrors('file');
+
+    expect(Yudisium::whereHas('mahasiswa', fn ($q) => $q->where('nim', '2024000099'))->exists())->toBeFalse();
+
+    $errorMessage = $component->errors()->first('file');
+    expect($errorMessage)->toStartWith('Terjadi kesalahan saat mengimport data: ');
+    expect($errorMessage)->not->toBe('Terjadi kesalahan saat mengimport data! Harap periksa kembali data yang diimport.');
+});
+
 it('redirects unauthenticated users to the login page', function () {
     $this->get(route('admin.akademik.yudisium.import'))->assertRedirect(route('login'));
 });

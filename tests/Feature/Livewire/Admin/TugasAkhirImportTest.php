@@ -968,6 +968,30 @@ it('preserves nilai, catatan, and is_ketua per dosen on update when their slots 
     expect($rowAfterFilled->is_ketua)->toBeTrue(); // tidak berubah karena kolom ketua dikosongkan
 });
 
+it('shows the underlying exception message instead of a generic one when the import fails', function () {
+    $admin = adminUser();
+    Mahasiswa::factory()->create(['nim' => '2024000099']);
+    Semester::factory()->create(['kode' => '20259']);
+
+    // 'judul' adalah string(255) di migration — nilai yang jauh melebihi itu memicu
+    // QueryException sungguhan (data too long) dari MySQL, tanpa perlu mock apa pun.
+    $file = makeTugasAkhirImportFile([
+        ['2024000099', '20259', str_repeat('a', 300), 'approved'],
+    ]);
+
+    $component = Livewire::actingAs($admin)
+        ->test(Import::class)
+        ->set('file', $file)
+        ->call('import')
+        ->assertHasErrors('file');
+
+    expect(TugasAkhir::whereHas('mahasiswa', fn ($q) => $q->where('nim', '2024000099'))->exists())->toBeFalse();
+
+    $errorMessage = $component->errors()->first('file');
+    expect($errorMessage)->toStartWith('Terjadi kesalahan saat mengimport data: ');
+    expect($errorMessage)->not->toBe('Terjadi kesalahan saat mengimport data! Harap periksa kembali data yang diimport.');
+});
+
 it('redirects unauthenticated users to the login page', function () {
     $this->get(route('admin.akademik.tugas-akhir.import'))->assertRedirect(route('login'));
 });
