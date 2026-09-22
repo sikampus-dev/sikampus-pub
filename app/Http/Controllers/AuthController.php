@@ -76,6 +76,15 @@ class AuthController extends Controller
             ]);
         }
 
+        // Akun yang dinonaktifkan admin lewat Pengaturan > Pengguna tidak boleh bisa login sama
+        // sekali — berlaku untuk semua tipe akun (admin/dosen/mahasiswa), bukan cuma yang
+        // butuh verifikasi email di atas.
+        if ($user->status === 'inactive') {
+            throw ValidationException::withMessages([
+                'login' => ['Akun Anda tidak aktif. Hubungi administrator untuk mengaktifkan kembali akun Anda.'],
+            ]);
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $payload = [

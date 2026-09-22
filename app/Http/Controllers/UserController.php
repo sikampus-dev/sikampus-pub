@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class UserController extends Controller
 {
@@ -312,8 +313,14 @@ class UserController extends Controller
 
     public function storeRolesAndScopes(Request $request, User $user): JsonResponse
     {
+        // Role Spatie (Superadmin/Akademik/Keuangan) cuma berarti untuk akun bertipe admin — lihat
+        // catatan lengkap di App\Livewire\Admin\Pengguna\Show::saveRoleScope() (versi panel dari
+        // endpoint ini). 'min:1' tetap dipaksakan untuk akun admin (itu satu-satunya syarat
+        // EnsureUserIsAdmin untuk membuka panel), tapi dosen/mahasiswa boleh dikirimi array kosong.
+        $isAdminAccount = $user->role === 'admin';
+
         $validated = $request->validate([
-            'roles' => ['required', 'array', 'min:1'],
+            'roles' => $isAdminAccount ? ['required', 'array', 'min:1'] : ['present', 'array'],
             'roles.*' => ['required', 'integer', 'exists:roles,id'],
             'scopes' => ['nullable', 'array'],
             'scopes.fakultas' => ['nullable', 'array'],
@@ -321,6 +328,12 @@ class UserController extends Controller
             'scopes.prodi' => ['nullable', 'array'],
             'scopes.prodi.*' => ['integer', 'exists:prodi,id'],
         ]);
+
+        if (! $isAdminAccount && $validated['roles'] !== []) {
+            return response()->json([
+                'message' => 'Role Superadmin/Akademik/Keuangan hanya berlaku untuk akun bertipe Admin/Operator.',
+            ], 422);
+        }
 
         // Meski endpoint ini sudah dibatasi ke Superadmin, tetap cegah pemanggil yang
         // (secara tidak lazim) punya scope sendiri untuk memberi scope di luar cakupannya.
@@ -654,7 +667,7 @@ class UserController extends Controller
             $user->syncPermissions($permissionsToAssign);
 
             // Clear permission cache to ensure changes are reflected immediately
-            app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+            app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
             // Verify the sync worked
             $directPermsAfter = $user->getDirectPermissions()->pluck('name')->toArray();

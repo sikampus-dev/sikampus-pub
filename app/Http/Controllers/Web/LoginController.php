@@ -63,6 +63,14 @@ class LoginController extends Controller
             ]);
         }
 
+        // Sama seperti AuthController::login (API) — akun yang dinonaktifkan admin tidak boleh
+        // bisa login sama sekali, berlaku untuk semua tipe akun.
+        if ($user->status === 'inactive') {
+            throw ValidationException::withMessages([
+                'login' => 'Akun Anda tidak aktif. Hubungi administrator untuk mengaktifkan kembali akun Anda.',
+            ]);
+        }
+
         $destination = $user->webDashboardRouteName();
 
         if ($destination === null) {

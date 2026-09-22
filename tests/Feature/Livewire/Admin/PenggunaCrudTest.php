@@ -79,6 +79,50 @@ it('assigns a role and scope to a pengguna from the show page', function () {
     expect($pengguna->fresh()->hasRole('Keuangan'))->toBeTrue();
 });
 
+it('allows removing the last spatie role from a dosen account, unlike an admin account', function () {
+    $superadmin = adminUser();
+    $dosenUser = User::factory()->create(['role' => 'dosen']);
+    $akademik = Role::firstOrCreate(['name' => 'Akademik', 'guard_name' => 'web'], ['code' => 'akademik']);
+    $dosenUser->assignRole($akademik);
+
+    Livewire::actingAs($superadmin)
+        ->test(Show::class, ['id' => $dosenUser->id])
+        ->call('deleteRole', 'akademik');
+
+    expect($dosenUser->fresh()->hasRole('Akademik'))->toBeFalse();
+    expect($dosenUser->fresh()->roles)->toHaveCount(0);
+});
+
+it('rejects assigning a spatie role to a dosen account through the show page role form', function () {
+    $superadmin = adminUser();
+    $dosenUser = User::factory()->create(['role' => 'dosen']);
+    $akademik = Role::firstOrCreate(['name' => 'Akademik', 'guard_name' => 'web'], ['code' => 'akademik']);
+
+    Livewire::actingAs($superadmin)
+        ->test(Show::class, ['id' => $dosenUser->id])
+        ->call('openRoleForm')
+        ->set('selectedRoleIds', [$akademik->id])
+        ->call('saveRoleScope')
+        ->assertHasErrors(['selectedRoleIds']);
+
+    expect($dosenUser->fresh()->hasRole('Akademik'))->toBeFalse();
+});
+
+it('rejects assigning a spatie role to a mahasiswa account through the show page role form', function () {
+    $superadmin = adminUser();
+    $mahasiswaUser = User::factory()->create(['role' => 'mahasiswa']);
+    $akademik = Role::firstOrCreate(['name' => 'Akademik', 'guard_name' => 'web'], ['code' => 'akademik']);
+
+    Livewire::actingAs($superadmin)
+        ->test(Show::class, ['id' => $mahasiswaUser->id])
+        ->call('openRoleForm')
+        ->set('selectedRoleIds', [$akademik->id])
+        ->call('saveRoleScope')
+        ->assertHasErrors(['selectedRoleIds']);
+
+    expect($mahasiswaUser->fresh()->hasRole('Akademik'))->toBeFalse();
+});
+
 it('automatically assigns the chosen spatie role — and its permissions — when creating an admin account', function () {
     $admin = adminUser();
     $keuanganRole = Role::where('name', 'Keuangan')->firstOrFail();

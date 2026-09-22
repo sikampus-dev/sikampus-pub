@@ -61,6 +61,40 @@ it('rejects a mahasiswa whose email is not verified yet', function () {
     $this->assertGuest();
 });
 
+it('rejects a deactivated admin even with correct credentials', function () {
+    $admin = adminUser('admin_akademik');
+    $admin->update(['status' => 'inactive']);
+
+    $this->post(route('login'), [
+        'login' => $admin->email,
+        'password' => 'password',
+    ])->assertSessionHasErrors('login');
+
+    $this->assertGuest();
+});
+
+it('rejects a deactivated mahasiswa even with correct credentials', function () {
+    $mahasiswa = User::factory()->create(['role' => 'mahasiswa', 'username' => '2024099', 'status' => 'inactive']);
+
+    $this->post(route('login'), [
+        'login' => '2024099',
+        'password' => 'password',
+    ])->assertSessionHasErrors('login');
+
+    $this->assertGuest();
+});
+
+it('allows a user with status active to log in as before', function () {
+    $mahasiswa = User::factory()->create(['role' => 'mahasiswa', 'username' => '2024098', 'status' => 'active']);
+
+    $this->post(route('login'), [
+        'login' => '2024098',
+        'password' => 'password',
+    ])->assertRedirect(route('mahasiswa.dashboard'));
+
+    $this->assertAuthenticatedAs($mahasiswa);
+});
+
 it('rejects a user with no matching panel', function () {
     $user = User::factory()->create(['role' => 'staff']);
 

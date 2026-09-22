@@ -162,12 +162,27 @@ class Show extends Component
     {
         abort_unless($this->isSuperadminActor(), 403);
 
+        // Role Spatie (Superadmin/Akademik/Keuangan) cuma berarti untuk akun bertipe admin — itu
+        // yang dibaca EnsureUserIsAdmin(Web) untuk membuka panel admin. Akun dosen/mahasiswa
+        // mengakses portalnya lewat kolom users.role legacy, sama sekali independen dari Spatie
+        // role. Kalau dosen/mahasiswa sampai kebagian Spatie role (mis. admin salah pilih baris),
+        // dia akan lolos DUA middleware sekaligus dan bisa membuka panel admin — jadi jalur ini
+        // ditutup dari sumbernya, bukan cuma dibiarkan lalu dibersihkan lewat deleteRole().
+        $pengguna = $this->pengguna;
+        $isAdminAccount = $pengguna->role === 'admin';
+
         $this->validate([
-            'selectedRoleIds' => ['required', 'array', 'min:1'],
+            'selectedRoleIds' => $isAdminAccount ? ['required', 'array', 'min:1'] : ['array'],
             'selectedRoleIds.*' => ['integer', 'exists:roles,id'],
             'selectedFakultasIds.*' => ['integer', 'exists:fakultas,id'],
             'selectedProdiIds.*' => ['integer', 'exists:prodi,id'],
         ]);
+
+        if (! $isAdminAccount && $this->selectedRoleIds !== []) {
+            $this->addError('selectedRoleIds', 'Role Superadmin/Akademik/Keuangan hanya berlaku untuk akun bertipe Admin/Operator. Ubah tipe akun pengguna ini dulu kalau memang ingin memberinya role admin.');
+
+            return;
+        }
 
         if ($this->selectedFakultasIds !== [] && $this->selectedProdiIds !== []) {
             $this->addError('selectedProdiIds', 'Pilih salah satu: scope Fakultas (akses semua prodi di fakultas tsb) atau scope Program Studi (akses prodi tertentu saja). Tidak bisa keduanya sekaligus.');
@@ -183,8 +198,6 @@ class Show extends Component
                 return;
             }
         }
-
-        $pengguna = $this->pengguna;
 
         DB::beginTransaction();
         try {
@@ -235,17 +248,21 @@ class Show extends Component
     {
         abort_unless($this->isSuperadminActor(), 403);
 
+        $pengguna = $this->pengguna;
         $rolesData = $this->rolesData;
         $removeId = $rolesData[$roleCode]['role_id'] ?? null;
         $remainingIds = array_values(array_diff(collect($rolesData)->pluck('role_id')->all(), [$removeId]));
 
-        if ($remainingIds === []) {
+        // Minimal satu role hanya wajib untuk akun bertipe admin — itu satu-satunya syarat
+        // EnsureUserIsAdmin(Web) untuk membuka panel admin (lihat saveRoleScope() di atas).
+        // Dosen/mahasiswa boleh berakhir tanpa Spatie role sama sekali; itu justru keadaan
+        // normalnya (portalnya dijaga lewat users.role, bukan Spatie role).
+        if ($remainingIds === [] && $pengguna->role === 'admin') {
             session()->flash('error', 'Pengguna harus memiliki minimal satu role.');
 
             return;
         }
 
-        $pengguna = $this->pengguna;
         $pengguna->syncRoles(Role::whereIn('id', $remainingIds)->get());
 
         DB::table('user_role_scopes')
