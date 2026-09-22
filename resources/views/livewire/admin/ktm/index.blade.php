@@ -33,7 +33,7 @@
     {{-- Tab Navigation --}}
     <div class="mb-6 border-b border-neutral-200">
         <nav class="-mb-px flex flex-wrap gap-6">
-            @foreach ([['key' => 'data', 'label' => 'Data KTM'], ['key' => 'template', 'label' => 'Template KTM'], ['key' => 'header', 'label' => 'Pengaturan Header']] as $tab)
+            @foreach ([['key' => 'data', 'label' => 'Data KTM'], ['key' => 'template', 'label' => 'Template KTM'], ['key' => 'header', 'label' => 'Pengaturan Tampilan']] as $tab)
                 <button
                     type="button"
                     wire:click="setTab('{{ $tab['key'] }}')"
@@ -193,9 +193,9 @@
         </div>
     @endif
 
-    {{-- Tab: Pengaturan Header --}}
+    {{-- Tab: Pengaturan Tampilan --}}
     @if ($activeTab === 'header')
-        <form wire:submit="saveHeaderSettings" class="rounded-2xl bg-white p-6 shadow-border">
+        <form wire:submit="saveDisplaySettings" class="rounded-2xl bg-white p-6 shadow-border">
             <h3 class="mb-2 text-sm font-semibold text-neutral-900">Gaya Header KTM</h3>
             <p class="mb-6 text-sm text-neutral-500">
                 Mengatur tampilan judul "Kartu Tanda Mahasiswa" dan nama perguruan tinggi di bagian atas kartu.
@@ -246,6 +246,32 @@
                     <option value="right">Kanan</option>
                 </select>
                 @error('headerAlign') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="mt-8 border-t border-neutral-100 pt-6">
+                <h3 class="mb-2 text-sm font-semibold text-neutral-900">Ukuran Font Body</h3>
+                <p class="mb-4 text-sm text-neutral-500">
+                    Mengatur ukuran font baris NIM, Nama, dan Prodi mahasiswa. Nama/Prodi yang terlalu panjang akan
+                    tetap turun ke baris berikutnya secara otomatis mengikuti lebar kartu.
+                </p>
+
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Ukuran Font NIM (px)</label>
+                        <input type="number" wire:model="bodyNimSize" min="6" max="80" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('bodyNimSize') ring-2 ring-red-500 @enderror" />
+                        @error('bodyNimSize') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Ukuran Font Nama (px)</label>
+                        <input type="number" wire:model="bodyNamaSize" min="6" max="80" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('bodyNamaSize') ring-2 ring-red-500 @enderror" />
+                        @error('bodyNamaSize') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Ukuran Font Prodi (px)</label>
+                        <input type="number" wire:model="bodyProdiSize" min="6" max="80" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border @error('bodyProdiSize') ring-2 ring-red-500 @enderror" />
+                        @error('bodyProdiSize') <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                </div>
             </div>
 
             <div class="mt-6 flex justify-end">

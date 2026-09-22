@@ -47,6 +47,12 @@ class Index extends Component
 
     public int $headerUnivSize = 38;
 
+    public int $bodyNimSize = 15;
+
+    public int $bodyNamaSize = 15;
+
+    public int $bodyProdiSize = 15;
+
     public function mount(): void
     {
         $tw = (int) config('ktm.template_width', 800);
@@ -60,6 +66,9 @@ class Index extends Component
                 KtmImageGenerator::SETTING_HEADER_TITLE_SIZE,
                 KtmImageGenerator::SETTING_HEADER_UNIV_COLOR,
                 KtmImageGenerator::SETTING_HEADER_UNIV_SIZE,
+                KtmImageGenerator::SETTING_BODY_NIM_SIZE,
+                KtmImageGenerator::SETTING_BODY_NAMA_SIZE,
+                KtmImageGenerator::SETTING_BODY_PRODI_SIZE,
             ])
             ->pluck('value', 'key');
 
@@ -68,6 +77,11 @@ class Index extends Component
         $this->headerUnivColor = '#'.ltrim((string) ($rows->get(KtmImageGenerator::SETTING_HEADER_UNIV_COLOR) ?: config('ktm.layout.header_univ_color', '000000')), '#');
         $this->headerTitleSize = (int) ($rows->get(KtmImageGenerator::SETTING_HEADER_TITLE_SIZE) ?: round((float) config('ktm.layout.header_title_size', 0.053) * $minSide));
         $this->headerUnivSize = (int) ($rows->get(KtmImageGenerator::SETTING_HEADER_UNIV_SIZE) ?: round((float) config('ktm.layout.header_univ_size', 0.083) * $minSide));
+
+        $bodyDefault = (int) round((float) config('ktm.layout.data_line_size', 0.032) * $minSide);
+        $this->bodyNimSize = (int) ($rows->get(KtmImageGenerator::SETTING_BODY_NIM_SIZE) ?: $bodyDefault);
+        $this->bodyNamaSize = (int) ($rows->get(KtmImageGenerator::SETTING_BODY_NAMA_SIZE) ?: $bodyDefault);
+        $this->bodyProdiSize = (int) ($rows->get(KtmImageGenerator::SETTING_BODY_PRODI_SIZE) ?: $bodyDefault);
     }
 
     public function setTab(string $tab): void
@@ -241,11 +255,11 @@ class Index extends Component
     }
 
     /**
-     * Simpan pengaturan tampilan header KTM (warna teks, ukuran font, perataan). Tidak
-     * mempengaruhi gambar KTM yang sudah pernah dibuat — hanya berlaku untuk generate/regenerate
-     * berikutnya, sama seperti pola perubahan template gambar di atas.
+     * Simpan pengaturan tampilan KTM: header (warna teks, ukuran font, perataan) dan ukuran font
+     * body (NIM/Nama/Prodi). Tidak mempengaruhi gambar KTM yang sudah pernah dibuat — hanya
+     * berlaku untuk generate/regenerate berikutnya, sama seperti pola perubahan template di atas.
      */
-    public function saveHeaderSettings(): void
+    public function saveDisplaySettings(): void
     {
         $validated = $this->validate([
             'headerAlign' => ['required', 'in:left,center,right'],
@@ -253,12 +267,18 @@ class Index extends Component
             'headerTitleSize' => ['required', 'integer', 'min:8', 'max:120'],
             'headerUnivColor' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'headerUnivSize' => ['required', 'integer', 'min:8', 'max:120'],
+            'bodyNimSize' => ['required', 'integer', 'min:6', 'max:80'],
+            'bodyNamaSize' => ['required', 'integer', 'min:6', 'max:80'],
+            'bodyProdiSize' => ['required', 'integer', 'min:6', 'max:80'],
         ], [], [
             'headerAlign' => 'perataan header',
             'headerTitleColor' => 'warna teks judul',
             'headerTitleSize' => 'ukuran font judul',
             'headerUnivColor' => 'warna teks nama perguruan tinggi',
             'headerUnivSize' => 'ukuran font nama perguruan tinggi',
+            'bodyNimSize' => 'ukuran font NIM',
+            'bodyNamaSize' => 'ukuran font nama mahasiswa',
+            'bodyProdiSize' => 'ukuran font prodi',
         ]);
 
         $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_ALIGN, $validated['headerAlign'], 'Perataan header KTM (left/center/right)');
@@ -266,8 +286,11 @@ class Index extends Component
         $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_TITLE_SIZE, (string) $validated['headerTitleSize'], 'Ukuran font judul KTM dalam px');
         $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_UNIV_COLOR, ltrim($validated['headerUnivColor'], '#'), 'Warna teks nama perguruan tinggi pada KTM');
         $this->upsertSetting(KtmImageGenerator::SETTING_HEADER_UNIV_SIZE, (string) $validated['headerUnivSize'], 'Ukuran font nama perguruan tinggi pada KTM dalam px');
+        $this->upsertSetting(KtmImageGenerator::SETTING_BODY_NIM_SIZE, (string) $validated['bodyNimSize'], 'Ukuran font baris NIM pada KTM dalam px');
+        $this->upsertSetting(KtmImageGenerator::SETTING_BODY_NAMA_SIZE, (string) $validated['bodyNamaSize'], 'Ukuran font baris Nama pada KTM dalam px');
+        $this->upsertSetting(KtmImageGenerator::SETTING_BODY_PRODI_SIZE, (string) $validated['bodyProdiSize'], 'Ukuran font baris Prodi pada KTM dalam px');
 
-        session()->flash('status', 'Pengaturan header KTM berhasil disimpan. Klik "Buat Ulang Gambar" pada data KTM yang sudah ada agar perubahan ikut diterapkan.');
+        session()->flash('status', 'Pengaturan tampilan KTM berhasil disimpan. Klik "Buat Ulang Gambar" pada data KTM yang sudah ada agar perubahan ikut diterapkan.');
     }
 
     /**

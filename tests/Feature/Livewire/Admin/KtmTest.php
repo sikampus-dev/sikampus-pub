@@ -205,7 +205,7 @@ it('redirects unauthenticated users to the login page', function () {
     $this->get(route('admin.administrasi.ktm'))->assertRedirect(route('login'));
 });
 
-it('saves ktm header style settings', function () {
+it('saves ktm header and body display settings', function () {
     $admin = adminUser();
 
     Livewire::actingAs($admin)
@@ -216,7 +216,10 @@ it('saves ktm header style settings', function () {
         ->set('headerTitleSize', 30)
         ->set('headerUnivColor', '#00ff00')
         ->set('headerUnivSize', 40)
-        ->call('saveHeaderSettings')
+        ->set('bodyNimSize', 12)
+        ->set('bodyNamaSize', 18)
+        ->set('bodyProdiSize', 14)
+        ->call('saveDisplaySettings')
         ->assertHasNoErrors();
 
     expect(Setting::where('key', 'ktm_header_align')->value('value'))->toBe('left');
@@ -224,19 +227,54 @@ it('saves ktm header style settings', function () {
     expect(Setting::where('key', 'ktm_header_title_size')->value('value'))->toBe('30');
     expect(Setting::where('key', 'ktm_header_univ_color')->value('value'))->toBe('00ff00');
     expect(Setting::where('key', 'ktm_header_univ_size')->value('value'))->toBe('40');
+    expect(Setting::where('key', 'ktm_body_nim_size')->value('value'))->toBe('12');
+    expect(Setting::where('key', 'ktm_body_nama_size')->value('value'))->toBe('18');
+    expect(Setting::where('key', 'ktm_body_prodi_size')->value('value'))->toBe('14');
 });
 
-it('rejects an invalid header color when saving header settings', function () {
+it('rejects an invalid header color when saving display settings', function () {
     $admin = adminUser();
 
     Livewire::actingAs($admin)
         ->test(Index::class)
         ->set('activeTab', 'header')
         ->set('headerTitleColor', 'not-a-color')
-        ->call('saveHeaderSettings')
+        ->call('saveDisplaySettings')
         ->assertHasErrors(['headerTitleColor']);
 
     expect(Setting::where('key', 'ktm_header_title_color')->exists())->toBeFalse();
+});
+
+it('rejects an out-of-range body font size when saving display settings', function () {
+    $admin = adminUser();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('activeTab', 'header')
+        ->set('bodyNamaSize', 500)
+        ->call('saveDisplaySettings')
+        ->assertHasErrors(['bodyNamaSize']);
+
+    expect(Setting::where('key', 'ktm_body_nama_size')->exists())->toBeFalse();
+});
+
+it('generates a ktm image using custom body font sizes per line', function () {
+    seedKtmTemplate();
+    Setting::create(['key' => 'ktm_body_nim_size', 'value' => '10', 'description' => 't', 'order' => 0]);
+    Setting::create(['key' => 'ktm_body_nama_size', 'value' => '22', 'description' => 't', 'order' => 0]);
+    Setting::create(['key' => 'ktm_body_prodi_size', 'value' => '16', 'description' => 't', 'order' => 0]);
+
+    $admin = adminUser();
+    $mahasiswa = Mahasiswa::factory()->create(['nama' => 'Test Body Size', 'nim' => '2024555077']);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->call('selectMahasiswa', $mahasiswa->id, $mahasiswa->nim.' - '.$mahasiswa->nama)
+        ->call('save')
+        ->assertRedirect(route('admin.administrasi.ktm'));
+
+    $ktm = Ktm::where('id_mahasiswa', $mahasiswa->id)->firstOrFail();
+    Storage::disk('public')->assertExists($ktm->file);
 });
 
 it('generates a ktm image with a long name that wraps instead of throwing', function () {

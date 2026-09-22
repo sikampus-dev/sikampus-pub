@@ -26,6 +26,12 @@ class KtmImageGenerator
 
     public const SETTING_HEADER_UNIV_SIZE = 'ktm_header_univ_size';
 
+    public const SETTING_BODY_NIM_SIZE = 'ktm_body_nim_size';
+
+    public const SETTING_BODY_NAMA_SIZE = 'ktm_body_nama_size';
+
+    public const SETTING_BODY_PRODI_SIZE = 'ktm_body_prodi_size';
+
     public function __construct(
         private ImageManager $imageManager
     ) {}
@@ -103,7 +109,7 @@ class KtmImageGenerator
             $prodiStr = $j !== '' ? strtoupper($m->prodi->nama).' ('.$j.')' : strtoupper($m->prodi->nama);
         }
 
-        $lineSize = (float) ($layout['data_line_size'] ?? 0.032) * $minSide;
+        $bodySizes = $this->resolveBodySizes($minSide, $layout);
         $y = (int) ($h * (float) ($layout['data_start_y'] ?? 0.5));
         $rightMargin = (int) max(4, $w * 0.03);
         $dataMaxW = (int) max(60, $w - $dataX - $rightMargin);
@@ -111,34 +117,26 @@ class KtmImageGenerator
         /* Jeda antarblok (NIM → NAMA → PRODI) vs tinggi piksel */
         $blockGap = (float) ($layout['data_line_gap'] ?? 0.1) * $h;
 
-        $fields = [
-            ['NIM', $nim],
-            ['NAMA', $nama],
-            ['PRODI', $prodiStr],
+        $lines = [
+            ['text' => $this->formatKtmLine('NIM', $nim), 'size' => $bodySizes['nim']],
+            ['text' => $this->formatKtmLine('NAMA', $nama), 'size' => $bodySizes['nama']],
+            ['text' => $this->formatKtmLine('PRODI', $prodiStr), 'size' => $bodySizes['prodi']],
         ];
 
-        foreach ($fields as [$label, $value]) {
-            $prefix = str_pad($label, 5).' : ';
-            $prefixWidthPx = (int) ceil($this->textLineWidthPx($prefix, $lineSize, $fontBold));
-            /* Sisa lebar untuk nilai, konsisten di baris pertama maupun baris lanjutan — supaya
-               baris lanjutan sejajar dengan awal nilai (setelah titik dua), bukan dengan label. */
-            $valueMaxW = max(20, $dataMaxW - $prefixWidthPx);
-            $valueLines = explode("\n", $this->wrapTextToWidth($value, $lineSize, $fontBold, $valueMaxW));
-
-            $this->drawTextBlock($image, $prefix.$valueLines[0], $dataX, $y, $lineSize, $fontBold, 'left');
-            for ($i = 1; $i < count($valueLines); $i++) {
-                $this->drawTextBlock(
-                    $image,
-                    $valueLines[$i],
-                    $dataX + $prefixWidthPx,
-                    $y + (int) ($lineSize * $lineHeight * $i),
-                    $lineSize,
-                    $fontBold,
-                    'left',
-                );
-            }
-
-            $y += (int) ($lineSize * $lineHeight * count($valueLines) + $blockGap);
+        foreach ($lines as $line) {
+            $wrapped = $this->wrapTextToWidth($line['text'], $line['size'], $fontBold, $dataMaxW);
+            $numVisualLines = substr_count($wrapped, "\n") + 1;
+            $this->drawTextBlock(
+                $image,
+                $wrapped,
+                $dataX,
+                $y,
+                $line['size'],
+                $fontBold,
+                'left',
+                $lineHeight,
+            );
+            $y += (int) ($line['size'] * $lineHeight * $numVisualLines + $blockGap);
         }
 
         $filename = 'ktm/ktm_'.(int) $m->id.'_'.date('Ymd_His').'.png';
@@ -317,6 +315,11 @@ class KtmImageGenerator
         return is_readable($abs) ? $abs : null;
     }
 
+    private function formatKtmLine(string $label, string $value): string
+    {
+        return str_pad($label, 5).' : '.mb_strtoupper($value, 'UTF-8');
+    }
+
     /**
      * Pisah teks multi-kata (UTF-8) supaya lebar renderednya tidak pernah melebihi $maxWidthPx —
      * diukur lewat imagettfbbox() (bbox TTF sungguhan), bukan perkiraan jumlah karakter, supaya
@@ -427,6 +430,37 @@ class KtmImageGenerator
             'title_size' => $titleSize !== null && $titleSize !== '' ? (float) $titleSize : null,
             'univ_size' => $univSize !== null && $univSize !== '' ? (float) $univSize : null,
         ];
+    }
+
+    /**
+     * Ukuran font body (NIM/NAMA/PRODI) dari Pengaturan > KTM > Pengaturan Tampilan, per baris —
+     * jatuh ke `data_line_size` (config/ktm.php) kalau salah satu belum pernah diatur.
+     *
+     * @param  array<string, mixed>  $layout
+     * @return array{nim: float, nama: float, prodi: float}
+     */
+    private function resolveBodySizes(int $minSide, array $layout): array
+    {
+        $rows = Setting::query()
+            ->whereIn('key', [
+                self::SETTING_BODY_NIM_SIZE,
+                self::SETTING_BODY_NAMA_SIZE,
+                self::SETTING_BODY_PRODI_SIZE,
+            ])
+            ->pluck('value', 'key');
+
+        $default = (float) ($layout['data_line_size'] ?? 0.032) * $minSide;
+
+        return [
+            'nim' => $this->floatSettingOrDefault($rows->get(self::SETTING_BODY_NIM_SIZE), $default),
+            'nama' => $this->floatSettingOrDefault($rows->get(self::SETTING_BODY_NAMA_SIZE), $default),
+            'prodi' => $this->floatSettingOrDefault($rows->get(self::SETTING_BODY_PRODI_SIZE), $default),
+        ];
+    }
+
+    private function floatSettingOrDefault(mixed $value, float $default): float
+    {
+        return $value !== null && $value !== '' ? (float) $value : $default;
     }
 
     private function drawTextBlock(
