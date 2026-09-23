@@ -4,6 +4,9 @@
     // supaya sidebar sudah lengkap sejak awal — cukup ganti target rute saat modulnya dibangun.
     $dosenNavItems = [
         ['route' => 'dosen.dashboard', 'label' => 'Dashboard', 'icon' => 'layout-dashboard'],
+        // Kalender Akademik: modul baru, tidak ada di siak-frontend — sengaja tidak mengikuti
+        // urutan DosenSidebar.tsx di atas.
+        ['route' => 'dosen.kalender-akademik', 'label' => 'Kalender Akademik', 'icon' => 'calendar-days'],
         ['label' => 'Perkuliahan', 'icon' => 'calendar', 'children' => [
             ['route' => 'dosen.kelas', 'label' => 'Kelas'],
             ['route' => 'dosen.jadwal', 'label' => 'Jadwal Mengajar'],

@@ -13,6 +13,7 @@
     $km = $kelas->kurikulumMatkul;
     $data = $this->data;
     $jenisManual = collect($data['jenis_penilaian'])->where('status', 'manual')->values();
+    $periode = $this->periodeNilaiCheck;
 @endphp
 
 <div class="space-y-4">
@@ -22,6 +23,16 @@
             <span>{{ session('status') }}</span>
         </div>
     @endif
+
+    @unless ($periode['allowed'])
+        <div class="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <i data-lucide="calendar-off" class="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true"></i>
+            <div>
+                <p class="font-semibold">Pengisian nilai sedang tidak dibuka</p>
+                <p>{{ $periode['alasan'] ?? 'Periode pengisian nilai sedang tidak aktif.' }}</p>
+            </div>
+        </div>
+    @endunless
 
     <div class="rounded-2xl bg-white p-5 shadow-border">
         <p class="text-sm font-semibold text-neutral-900">{{ $km?->kodeMatkulLabel() ?? '-' }} - {{ $km?->namaMatkulLabel() ?? '-' }}</p>
@@ -43,6 +54,7 @@
             type="button"
             wire:click="save"
             wire:loading.attr="disabled"
+            @disabled(! $periode['allowed'])
             class="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-50"
         >
             <i data-lucide="save" class="h-4 w-4" aria-hidden="true"></i>

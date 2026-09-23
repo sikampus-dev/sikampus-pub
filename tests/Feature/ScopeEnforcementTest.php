@@ -131,6 +131,62 @@ it('mengizinkan assignment scope prodi saja tanpa fakultas', function () {
     expect($target->fresh()->getAllowedProdiIds())->toBe([$prodi->id]);
 });
 
+// Spatie role (Superadmin/Akademik/Keuangan) cuma berarti untuk akun bertipe admin — itu
+// satu-satunya syarat EnsureUserIsAdmin(Web) untuk membuka panel admin. Dosen/mahasiswa
+// mengakses portalnya lewat kolom users.role legacy, independen dari Spatie role. Kalau
+// dosen/mahasiswa sampai kebagian Spatie role, dia lolos dua middleware sekaligus dan bisa
+// membuka panel admin — jadi endpoint ini menolaknya dari sumbernya.
+it('menolak pemberian spatie role ke akun bertipe dosen', function () {
+    $role = Role::firstOrCreate(['name' => 'Akademik', 'guard_name' => 'web'], ['code' => 'akademik']);
+    $superadmin = adminUser();
+    $dosenUser = User::factory()->create(['role' => 'dosen']);
+
+    $this->actingAs($superadmin)
+        ->postJson("/api/users/{$dosenUser->id}/roles-scopes", [
+            'roles' => [$role->id],
+        ])
+        ->assertStatus(422);
+
+    expect($dosenUser->fresh()->hasAnyRole(['Akademik', 'akademik']))->toBeFalse();
+});
+
+it('menolak pemberian spatie role ke akun bertipe mahasiswa', function () {
+    $role = Role::firstOrCreate(['name' => 'Akademik', 'guard_name' => 'web'], ['code' => 'akademik']);
+    $superadmin = adminUser();
+    $mahasiswaUser = User::factory()->create(['role' => 'mahasiswa']);
+
+    $this->actingAs($superadmin)
+        ->postJson("/api/users/{$mahasiswaUser->id}/roles-scopes", [
+            'roles' => [$role->id],
+        ])
+        ->assertStatus(422);
+
+    expect($mahasiswaUser->fresh()->hasAnyRole(['Akademik', 'akademik']))->toBeFalse();
+});
+
+it('mengizinkan roles kosong untuk akun bertipe dosen/mahasiswa (bukan admin)', function () {
+    $superadmin = adminUser();
+    $dosenUser = User::factory()->create(['role' => 'dosen']);
+
+    $this->actingAs($superadmin)
+        ->postJson("/api/users/{$dosenUser->id}/roles-scopes", [
+            'roles' => [],
+        ])
+        ->assertCreated();
+});
+
+it('tetap mewajibkan minimal satu role untuk akun bertipe admin', function () {
+    $superadmin = adminUser();
+    $adminUser = User::factory()->create(['role' => 'admin']);
+
+    $this->actingAs($superadmin)
+        ->postJson("/api/users/{$adminUser->id}/roles-scopes", [
+            'roles' => [],
+        ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('roles');
+});
+
 it('admin dengan scope prodi tidak memulihkan nilai terhapus milik prodi lain lewat update', function () {
     $prodiA = Prodi::factory()->create();
     $prodiB = Prodi::factory()->create();

@@ -37,6 +37,7 @@ return [
         'akademik.jadwal' => 'manage jadwal',
         'akademik.jadwal-ujian' => 'manage jadwal ujian',
         'akademik.perkuliahan' => 'manage perkuliahan',
+        'akademik.kalender-akademik' => 'manage kalender akademik',
         'akademik.tugas-akhir' => 'manage tugas akhir',
         'akademik.yudisium' => 'manage yudisium',
         'akademik.wisuda' => 'manage wisuda',

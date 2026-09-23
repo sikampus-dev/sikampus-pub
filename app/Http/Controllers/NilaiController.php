@@ -2,35 +2,41 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Mahasiswa;
-use App\Models\Krs;
-use App\Models\Nilai;
-use App\Models\Matkul;
-use App\Models\Kelas;
-use App\Models\KurikulumMatkul;
-use App\Models\Semester;
-use App\Models\Perkuliahan;
-use App\Models\Kehadiran;
-use App\Models\JenisPenilaian;
 use App\Models\BobotPenilaian;
 use App\Models\Dosen;
 use App\Models\DosenWali;
-use App\Models\RentangNilai;
+use App\Models\Jadwal;
+use App\Models\JadwalDosen;
+use App\Models\JenisPenilaian;
+use App\Models\Kehadiran;
+use App\Models\Kelas;
+use App\Models\Krs;
+use App\Models\KurikulumMatkul;
+use App\Models\Mahasiswa;
+use App\Models\Matkul;
+use App\Models\Nilai;
 use App\Models\NilaiRevisi;
 use App\Models\Notifikasi;
+use App\Models\Perkuliahan;
+use App\Models\RentangNilai;
+use App\Models\Semester;
 use App\Models\Setting;
-use App\Services\SemesterService;
+use App\Services\KalenderAkademikGateService;
 use App\Services\PendaftaranKrs;
+use App\Services\SemesterService;
 use App\Services\UrutanMatkulService;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Dompdf\Dompdf;
-use Dompdf\Options;
 
 class NilaiController extends Controller
 {
@@ -43,17 +49,17 @@ class NilaiController extends Controller
 
         // Query untuk mendapatkan data mahasiswa dengan jumlah mata kuliah yang sudah dikontrak
         $query = Mahasiswa::select([
-                'mahasiswa.id',
-                'mahasiswa.nim',
-                'mahasiswa.nama',
-                'prodi.id as id_prodi',
-                'prodi.nama as prodi_nama',
-                DB::raw('COUNT(DISTINCT krs.id) as jumlah_mata_kuliah')
-            ])
+            'mahasiswa.id',
+            'mahasiswa.nim',
+            'mahasiswa.nama',
+            'prodi.id as id_prodi',
+            'prodi.nama as prodi_nama',
+            DB::raw('COUNT(DISTINCT krs.id) as jumlah_mata_kuliah'),
+        ])
             ->leftJoin('prodi', 'mahasiswa.id_prodi', '=', 'prodi.id')
             ->leftJoin('krs', function ($join) {
                 $join->on('krs.id_mahasiswa', '=', 'mahasiswa.id')
-                     ->whereNull('krs.deleted_at');
+                    ->whereNull('krs.deleted_at');
             })
             ->whereNull('mahasiswa.deleted_at')
             ->groupBy('mahasiswa.id', 'mahasiswa.nim', 'mahasiswa.nama', 'prodi.id', 'prodi.nama');
@@ -62,7 +68,7 @@ class NilaiController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('mahasiswa.nama', 'like', "%{$search}%")
-                  ->orWhere('mahasiswa.nim', 'like', "%{$search}%");
+                    ->orWhere('mahasiswa.nim', 'like', "%{$search}%");
             });
         }
 
@@ -71,7 +77,7 @@ class NilaiController extends Controller
             $allowedProdiIds = $user->getAllowedProdiIds();
             if ($allowedProdiIds !== null) {
                 $query->whereIn('mahasiswa.id_prodi', $allowedProdiIds);
-                if ($prodiId && !in_array((int) $prodiId, $allowedProdiIds, true)) {
+                if ($prodiId && ! in_array((int) $prodiId, $allowedProdiIds, true)) {
                     $prodiId = null;
                 }
             }
@@ -96,7 +102,7 @@ class NilaiController extends Controller
         // Pagination
         $page = (int) $request->get('page', 1);
         $offset = ($page - 1) * $perPage;
-        
+
         $results = $query->orderBy('mahasiswa.nim')
             ->offset($offset)
             ->limit($perPage)
@@ -135,21 +141,21 @@ class NilaiController extends Controller
     public function getMyMataKuliah(Request $request): JsonResponse
     {
         $user = $request->user();
-        $dosen = \App\Models\Dosen::where('id_user', $user->id)->first();
-        
-        if (!$dosen) {
+        $dosen = Dosen::where('id_user', $user->id)->first();
+
+        if (! $dosen) {
             return response()->json([
-                'message' => 'Data dosen tidak ditemukan'
+                'message' => 'Data dosen tidak ditemukan',
             ], 404);
         }
 
         // Ambil semester aktif
         $activeSemester = Semester::where('is_active', true)->first();
-        
-        if (!$activeSemester) {
+
+        if (! $activeSemester) {
             return response()->json([
                 'semester' => null,
-                'data' => []
+                'data' => [],
             ]);
         }
 
@@ -161,7 +167,7 @@ class NilaiController extends Controller
             ->toArray();
 
         // Cara 2: Kelas dimana dosen memiliki jadwal aktif di semester aktif
-        $kelasWithJadwal = \App\Models\JadwalDosen::where('id_dosen', $dosen->id)
+        $kelasWithJadwal = JadwalDosen::where('id_dosen', $dosen->id)
             ->where('status', 'active')
             ->whereHas('jadwal.kelas', function ($q) use ($activeSemester) {
                 $q->where('id_semester', $activeSemester->id);
@@ -184,7 +190,7 @@ class NilaiController extends Controller
                     'kode' => $activeSemester->kode,
                     'nama' => $activeSemester->nama,
                 ],
-                'data' => []
+                'data' => [],
             ]);
         }
 
@@ -196,9 +202,9 @@ class NilaiController extends Controller
             'prodi.jenjang',
             'semester',
         ])
-        ->whereIn('id', $kelasIds)
-        ->where('id_semester', $activeSemester->id)
-        ->get();
+            ->whereIn('id', $kelasIds)
+            ->where('id_semester', $activeSemester->id)
+            ->get();
 
         // Hitung jumlah mahasiswa per kelas dari KRS
         $mahasiswaCounts = Krs::whereIn('id_kelas', $kelasIds)
@@ -212,22 +218,22 @@ class NilaiController extends Controller
         $data = $kelasList->map(function ($kelas) use ($mahasiswaCounts) {
             $kurikulumMatkul = $kelas->kurikulumMatkul;
             $matkul = $kurikulumMatkul?->matkul;
-            
+
             // Kode mata kuliah: prioritas dari kurikulum_matkul, jika kosong ambil dari matkul
-            $kodeMatkul = (!empty($kurikulumMatkul?->kode_matkul) && trim($kurikulumMatkul->kode_matkul) !== '') 
-                ? $kurikulumMatkul->kode_matkul 
+            $kodeMatkul = (! empty($kurikulumMatkul?->kode_matkul) && trim($kurikulumMatkul->kode_matkul) !== '')
+                ? $kurikulumMatkul->kode_matkul
                 : ($matkul?->kode ?? '-');
-            
+
             // Nama mata kuliah: prioritas dari kurikulum_matkul, jika kosong ambil dari matkul
-            $namaMatkul = (!empty($kurikulumMatkul?->nama_matkul) && trim($kurikulumMatkul->nama_matkul) !== '') 
-                ? $kurikulumMatkul->nama_matkul 
+            $namaMatkul = (! empty($kurikulumMatkul?->nama_matkul) && trim($kurikulumMatkul->nama_matkul) !== '')
+                ? $kurikulumMatkul->nama_matkul
                 : ($matkul?->nama ?? '-');
-            
+
             // SKS: prioritas dari kurikulum_matkul, jika kosong atau 0 ambil dari matkul
-            $sks = (!empty($kurikulumMatkul?->sks) && $kurikulumMatkul->sks > 0)
+            $sks = (! empty($kurikulumMatkul?->sks) && $kurikulumMatkul->sks > 0)
                 ? $kurikulumMatkul->sks
                 : ($matkul?->sks ?? 0);
-            
+
             return [
                 'id_kelas' => $kelas->id,
                 'kode_matkul' => $kodeMatkul,
@@ -250,8 +256,8 @@ class NilaiController extends Controller
                 'jumlah_mahasiswa' => $mahasiswaCounts[$kelas->id] ?? 0,
             ];
         })
-        ->sortBy('nama_matkul')
-        ->values();
+            ->sortBy('nama_matkul')
+            ->values();
 
         return response()->json([
             'semester' => [
@@ -269,11 +275,11 @@ class NilaiController extends Controller
     public function getMahasiswaByKelas(Request $request, int $idKelas): JsonResponse
     {
         $user = $request->user();
-        $dosen = \App\Models\Dosen::where('id_user', $user->id)->first();
-        
-        if (!$dosen) {
+        $dosen = Dosen::where('id_user', $user->id)->first();
+
+        if (! $dosen) {
             return response()->json([
-                'message' => 'Data dosen tidak ditemukan'
+                'message' => 'Data dosen tidak ditemukan',
             ], 404);
         }
 
@@ -286,9 +292,9 @@ class NilaiController extends Controller
             'semester',
         ])->find($idKelas);
 
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json([
-                'message' => 'Kelas tidak ditemukan'
+                'message' => 'Kelas tidak ditemukan',
             ], 404);
         }
 
@@ -297,21 +303,21 @@ class NilaiController extends Controller
         if ($kelas->id_dosen_pic === $dosen->id) {
             $hasAccess = true;
         } else {
-            $hasJadwal = \App\Models\JadwalDosen::whereHas('jadwal', function ($q) use ($idKelas) {
+            $hasJadwal = JadwalDosen::whereHas('jadwal', function ($q) use ($idKelas) {
                 $q->where('id_kelas', $idKelas);
             })
-            ->where('id_dosen', $dosen->id)
-            ->where('status', 'active')
-            ->exists();
+                ->where('id_dosen', $dosen->id)
+                ->where('status', 'active')
+                ->exists();
 
             if ($hasJadwal) {
                 $hasAccess = true;
             }
         }
 
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json([
-                'message' => 'Anda tidak memiliki akses ke kelas ini'
+                'message' => 'Anda tidak memiliki akses ke kelas ini',
             ], 403);
         }
 
@@ -320,18 +326,18 @@ class NilaiController extends Controller
             'mahasiswa.prodi',
             'mahasiswa.semester_masuk',
         ])
-        ->join('mahasiswa', 'krs.id_mahasiswa', '=', 'mahasiswa.id')
-        ->where('krs.id_kelas', $idKelas)
-        ->whereNull('krs.deleted_at')
-        ->whereNull('mahasiswa.deleted_at')
-        ->select('krs.*')
-        ->orderBy('mahasiswa.nim')
-        ->get();
+            ->join('mahasiswa', 'krs.id_mahasiswa', '=', 'mahasiswa.id')
+            ->where('krs.id_kelas', $idKelas)
+            ->whereNull('krs.deleted_at')
+            ->whereNull('mahasiswa.deleted_at')
+            ->select('krs.*')
+            ->orderBy('mahasiswa.nim')
+            ->get();
 
         // Ambil nilai komponen untuk semua KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiKomponenMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiKomponenList = DB::table('nilai_komponen')
                 ->whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
@@ -346,7 +352,7 @@ class NilaiController extends Controller
 
         // Ambil nilai (angka_mutu dan huruf_mutu) untuk semua KRS
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->get()
@@ -355,17 +361,17 @@ class NilaiController extends Controller
         }
 
         // Kode mata kuliah: prioritas dari kurikulum_matkul, jika kosong ambil dari matkul
-        $kodeMatkul = (!empty($kelas->kurikulumMatkul?->kode_matkul) && trim($kelas->kurikulumMatkul->kode_matkul) !== '') 
-            ? $kelas->kurikulumMatkul->kode_matkul 
+        $kodeMatkul = (! empty($kelas->kurikulumMatkul?->kode_matkul) && trim($kelas->kurikulumMatkul->kode_matkul) !== '')
+            ? $kelas->kurikulumMatkul->kode_matkul
             : ($kelas->kurikulumMatkul?->matkul?->kode ?? '-');
-        
+
         // Nama mata kuliah: prioritas dari kurikulum_matkul, jika kosong ambil dari matkul
-        $namaMatkul = (!empty($kelas->kurikulumMatkul?->nama_matkul) && trim($kelas->kurikulumMatkul->nama_matkul) !== '') 
-            ? $kelas->kurikulumMatkul->nama_matkul 
+        $namaMatkul = (! empty($kelas->kurikulumMatkul?->nama_matkul) && trim($kelas->kurikulumMatkul->nama_matkul) !== '')
+            ? $kelas->kurikulumMatkul->nama_matkul
             : ($kelas->kurikulumMatkul?->matkul?->nama ?? '-');
-        
+
         // SKS: prioritas dari kurikulum_matkul, jika kosong atau 0 ambil dari matkul
-        $sks = (!empty($kelas->kurikulumMatkul?->sks) && $kelas->kurikulumMatkul->sks > 0)
+        $sks = (! empty($kelas->kurikulumMatkul?->sks) && $kelas->kurikulumMatkul->sks > 0)
             ? $kelas->kurikulumMatkul->sks
             : ($kelas->kurikulumMatkul?->matkul?->sks ?? 0);
 
@@ -386,6 +392,7 @@ class NilaiController extends Controller
             $bobot = $bobotPenilaian !== null
                 ? (float) $bobotPenilaian->bobot
                 : (float) $jp->bobot;
+
             return [
                 'id' => $jp->id,
                 'kode' => $jp->kode,
@@ -419,8 +426,8 @@ class NilaiController extends Controller
 
         // Hitung persentase kehadiran per mahasiswa dari tabel kehadiran (status hadir)
         $persentaseKehadiranMap = [];
-        $jadwalList = \App\Models\Jadwal::where('id_kelas', $idKelas)->whereNull('deleted_at')->pluck('id')->toArray();
-        if (!empty($jadwalList) && $jenisPenilaianKehadiran) {
+        $jadwalList = Jadwal::where('id_kelas', $idKelas)->whereNull('deleted_at')->pluck('id')->toArray();
+        if (! empty($jadwalList) && $jenisPenilaianKehadiran) {
             $perkuliahanList = Perkuliahan::whereIn('id_jadwal', $jadwalList)->whereNull('deleted_at')->get();
             $perkuliahanIds = $perkuliahanList->pluck('id')->toArray();
             $jumlahPerkuliahan = count($perkuliahanIds);
@@ -529,7 +536,7 @@ class NilaiController extends Controller
      */
     public function getJenisPenilaian(Request $request): JsonResponse
     {
-        $jenisPenilaian = \App\Models\JenisPenilaian::whereNull('deleted_at')
+        $jenisPenilaian = JenisPenilaian::whereNull('deleted_at')
             ->where('status', 'manual')
             ->orderBy('nama')
             ->get();
@@ -544,10 +551,10 @@ class NilaiController extends Controller
     {
         $user = $request->user();
         $dosen = Dosen::where('id_user', $user->id)->first();
-        
-        if (!$dosen) {
+
+        if (! $dosen) {
             return response()->json([
-                'message' => 'Data dosen tidak ditemukan'
+                'message' => 'Data dosen tidak ditemukan',
             ], 404);
         }
 
@@ -557,9 +564,9 @@ class NilaiController extends Controller
             'prodi.jenjang',
         ])->find($idKelas);
 
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json([
-                'message' => 'Kelas tidak ditemukan'
+                'message' => 'Kelas tidak ditemukan',
             ], 404);
         }
 
@@ -568,29 +575,29 @@ class NilaiController extends Controller
         if ($kelas->id_dosen_pic === $dosen->id) {
             $hasAccess = true;
         } else {
-            $hasJadwal = \App\Models\JadwalDosen::whereHas('jadwal', function ($q) use ($idKelas) {
+            $hasJadwal = JadwalDosen::whereHas('jadwal', function ($q) use ($idKelas) {
                 $q->where('id_kelas', $idKelas);
             })
-            ->where('id_dosen', $dosen->id)
-            ->where('status', 'active')
-            ->exists();
+                ->where('id_dosen', $dosen->id)
+                ->where('status', 'active')
+                ->exists();
 
             if ($hasJadwal) {
                 $hasAccess = true;
             }
         }
 
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json([
-                'message' => 'Anda tidak memiliki akses ke kelas ini'
+                'message' => 'Anda tidak memiliki akses ke kelas ini',
             ], 403);
         }
 
         // Ambil jenjang dari kelas
         $jenjang = $kelas->prodi?->jenjang;
-        if (!$jenjang) {
+        if (! $jenjang) {
             return response()->json([
-                'message' => 'Jenjang tidak ditemukan untuk kelas ini'
+                'message' => 'Jenjang tidak ditemukan untuk kelas ini',
             ], 400);
         }
 
@@ -602,7 +609,7 @@ class NilaiController extends Controller
 
         if ($rentangNilaiList->isEmpty()) {
             return response()->json([
-                'message' => 'Rentang nilai tidak ditemukan untuk jenjang ' . $jenjang->nama
+                'message' => 'Rentang nilai tidak ditemukan untuk jenjang '.$jenjang->nama,
             ], 400);
         }
 
@@ -627,7 +634,7 @@ class NilaiController extends Controller
 
         if ($krsList->isEmpty()) {
             return response()->json([
-                'message' => 'Tidak ada mahasiswa yang mengambil kelas ini'
+                'message' => 'Tidak ada mahasiswa yang mengambil kelas ini',
             ], 400);
         }
 
@@ -654,6 +661,7 @@ class NilaiController extends Controller
                 if ($nilaiKomponenKrs->isEmpty()) {
                     $errorCount++;
                     $errors[] = "KRS ID {$krs->id}: Tidak ada nilai komponen";
+
                     continue;
                 }
 
@@ -664,7 +672,7 @@ class NilaiController extends Controller
 
                 foreach ($nilaiKomponenKrs as $nk) {
                     $jenisPenilaian = $jenisPenilaianList->get($nk->id_jenis_penilaian);
-                    if (!$jenisPenilaian) {
+                    if (! $jenisPenilaian) {
                         continue;
                     }
 
@@ -681,21 +689,23 @@ class NilaiController extends Controller
                 // Pastikan semua jenis penilaian sudah diisi
                 foreach ($jenisPenilaianList as $jp) {
                     $hasNilai = $nilaiKomponenKrs->contains('id_jenis_penilaian', $jp->id);
-                    if (!$hasNilai) {
+                    if (! $hasNilai) {
                         $allJenisPenilaianFilled = false;
                         break;
                     }
                 }
 
-                if (!$allJenisPenilaianFilled) {
+                if (! $allJenisPenilaianFilled) {
                     $errorCount++;
                     $errors[] = "KRS ID {$krs->id}: Belum semua jenis penilaian diisi";
+
                     continue;
                 }
 
                 if ($totalBobot === 0) {
                     $errorCount++;
                     $errors[] = "KRS ID {$krs->id}: Total bobot tidak boleh nol";
+
                     continue;
                 }
 
@@ -711,15 +721,16 @@ class NilaiController extends Controller
                     }
                 }
 
-                if (!$rentangNilai) {
+                if (! $rentangNilai) {
                     $errorCount++;
                     $errors[] = "KRS ID {$krs->id}: Nilai akhir {$nilaiAkhir} tidak sesuai dengan rentang nilai yang tersedia";
+
                     continue;
                 }
 
                 // Simpan atau update nilai (nilai soft-deleted dipulihkan: unique id_krs ikut menghitungnya)
                 $nilai = Nilai::where('id_krs', $krs->id)->first() ?? Nilai::pulihkanUntukNilaiBaru($krs->id);
-                
+
                 if ($nilai) {
                     $nilai->update([
                         'sks' => $sks,
@@ -751,9 +762,10 @@ class NilaiController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Terjadi kesalahan saat melakukan kalkulasi nilai akhir',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -767,21 +779,21 @@ class NilaiController extends Controller
         $user = $request->user();
         $dosen = Dosen::where('id_user', $user->id)->first();
 
-        if (!$dosen) {
+        if (! $dosen) {
             return response()->json(['message' => 'Data dosen tidak ditemukan'], 404);
         }
 
         $kelas = Kelas::with(['kurikulumMatkul.matkul', 'prodi.jenjang'])->find($idKelas);
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json(['message' => 'Kelas tidak ditemukan'], 404);
         }
 
         $hasAccess = $kelas->id_dosen_pic === $dosen->id
-            || \App\Models\JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
+            || JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
                 ->where('id_dosen', $dosen->id)
                 ->where('status', 'active')
                 ->exists();
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json(['message' => 'Anda tidak memiliki akses ke kelas ini'], 403);
         }
 
@@ -834,6 +846,7 @@ class NilaiController extends Controller
                 if ($nilaiKomponenKrs->isEmpty()) {
                     $errorCount++;
                     $errors[] = "KRS ID {$krs->id}: Tidak ada nilai komponen";
+
                     continue;
                 }
 
@@ -841,7 +854,7 @@ class NilaiController extends Controller
                 $totalBobot = 0;
                 foreach ($nilaiKomponenKrs as $nk) {
                     $jp = $jenisPenilaianList->get($nk->id_jenis_penilaian);
-                    if (!$jp) {
+                    if (! $jp) {
                         continue;
                     }
                     $bobot = $bobotPenilaianMap->get($nk->id_jenis_penilaian)
@@ -852,14 +865,16 @@ class NilaiController extends Controller
                 }
 
                 $allFilled = $jenisPenilaianList->every(fn ($jp) => $nilaiKomponenKrs->contains('id_jenis_penilaian', $jp->id));
-                if (!$allFilled) {
+                if (! $allFilled) {
                     $errorCount++;
                     $errors[] = "KRS ID {$krs->id}: Belum semua jenis penilaian diisi";
+
                     continue;
                 }
                 if ($totalBobot <= 0) {
                     $errorCount++;
                     $errors[] = "KRS ID {$krs->id}: Total bobot tidak boleh nol";
+
                     continue;
                 }
 
@@ -867,12 +882,14 @@ class NilaiController extends Controller
                 $rentangNilai = $rentangNilaiList->first(function ($rn) use ($nilaiAkhir) {
                     $low = (float) $rn['nilai_rendah'];
                     $high = (float) $rn['nilai_tinggi'];
+
                     return $nilaiAkhir >= $low && $nilaiAkhir <= $high;
                 });
 
-                if (!$rentangNilai) {
+                if (! $rentangNilai) {
                     $errorCount++;
-                    $errors[] = "KRS ID {$krs->id}: Nilai akhir " . round($nilaiAkhir, 2) . " tidak sesuai rentang";
+                    $errors[] = "KRS ID {$krs->id}: Nilai akhir ".round($nilaiAkhir, 2).' tidak sesuai rentang';
+
                     continue;
                 }
 
@@ -915,6 +932,7 @@ class NilaiController extends Controller
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Terjadi kesalahan saat kalkulasi',
                 'error' => $e->getMessage(),
@@ -930,21 +948,21 @@ class NilaiController extends Controller
         $user = $request->user();
         $dosen = Dosen::where('id_user', $user->id)->first();
 
-        if (!$dosen) {
+        if (! $dosen) {
             return response()->json(['message' => 'Data dosen tidak ditemukan'], 404);
         }
 
         $kelas = Kelas::find($idKelas);
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json(['message' => 'Kelas tidak ditemukan'], 404);
         }
 
         $hasAccess = $kelas->id_dosen_pic === $dosen->id
-            || \App\Models\JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
+            || JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
                 ->where('id_dosen', $dosen->id)
                 ->where('status', 'active')
                 ->exists();
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json(['message' => 'Anda tidak memiliki akses ke kelas ini'], 403);
         }
 
@@ -984,7 +1002,7 @@ class NilaiController extends Controller
     {
         $user = $request->user();
         $dosen = Dosen::where('id_user', $user->id)->first();
-        if (!$dosen) {
+        if (! $dosen) {
             return response()->json(['message' => 'Data dosen tidak ditemukan'], 404);
         }
 
@@ -996,26 +1014,26 @@ class NilaiController extends Controller
         ]);
 
         $krs = Krs::find($validated['id_krs']);
-        if (!$krs || $krs->deleted_at) {
+        if (! $krs || $krs->deleted_at) {
             return response()->json(['message' => 'KRS tidak ditemukan'], 404);
         }
 
         $idKelas = $krs->id_kelas;
         $kelas = Kelas::with(['kurikulumMatkul.matkul'])->find($idKelas);
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json(['message' => 'Kelas tidak ditemukan'], 404);
         }
 
         $hasAccess = $kelas->id_dosen_pic === $dosen->id
-            || \App\Models\JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
+            || JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
                 ->where('id_dosen', $dosen->id)
                 ->where('status', 'active')
                 ->exists();
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json(['message' => 'Anda tidak memiliki akses ke kelas ini'], 403);
         }
 
-        $sks = (!empty($kelas->kurikulumMatkul?->sks) && $kelas->kurikulumMatkul->sks > 0)
+        $sks = (! empty($kelas->kurikulumMatkul?->sks) && $kelas->kurikulumMatkul->sks > 0)
             ? (int) $kelas->kurikulumMatkul->sks
             : (int) ($kelas->kurikulumMatkul?->matkul?->sks ?? 0);
 
@@ -1041,7 +1059,7 @@ class NilaiController extends Controller
 
             $revisiCount = NilaiRevisi::where('id_krs', $validated['id_krs'])->whereNull('deleted_at')->count();
 
-            if (!$nilai) {
+            if (! $nilai) {
                 $nilaiBaru = [
                     'id_krs' => $validated['id_krs'],
                     'sks' => $sks ?: null,
@@ -1060,12 +1078,14 @@ class NilaiController extends Controller
             }
 
             DB::commit();
+
             return response()->json([
                 'message' => 'Revisi nilai berhasil disimpan.',
                 'revisi_ke' => $revisiCount,
             ], 200);
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal menyimpan revisi nilai.',
                 'error' => $e->getMessage(),
@@ -1081,7 +1101,7 @@ class NilaiController extends Controller
     {
         $user = $request->user();
         $dosen = Dosen::where('id_user', $user->id)->first();
-        if (!$dosen) {
+        if (! $dosen) {
             return response()->json(['message' => 'Data dosen tidak ditemukan'], 404);
         }
 
@@ -1092,33 +1112,33 @@ class NilaiController extends Controller
         ]);
 
         $krs = Krs::find($validated['id_krs']);
-        if (!$krs || $krs->deleted_at) {
+        if (! $krs || $krs->deleted_at) {
             return response()->json(['message' => 'KRS tidak ditemukan'], 404);
         }
 
         $idKelas = $krs->id_kelas;
         $kelas = Kelas::with(['kurikulumMatkul.matkul'])->find($idKelas);
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json(['message' => 'Kelas tidak ditemukan'], 404);
         }
 
         $hasAccess = $kelas->id_dosen_pic === $dosen->id
-            || \App\Models\JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
+            || JadwalDosen::whereHas('jadwal', fn ($q) => $q->where('id_kelas', $idKelas))
                 ->where('id_dosen', $dosen->id)
                 ->where('status', 'active')
                 ->exists();
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json(['message' => 'Anda tidak memiliki akses ke kelas ini'], 403);
         }
 
-        $sks = (!empty($kelas->kurikulumMatkul?->sks) && $kelas->kurikulumMatkul->sks > 0)
+        $sks = (! empty($kelas->kurikulumMatkul?->sks) && $kelas->kurikulumMatkul->sks > 0)
             ? (int) $kelas->kurikulumMatkul->sks
             : (int) ($kelas->kurikulumMatkul?->matkul?->sks ?? 0);
 
         $nilai = Nilai::where('id_krs', $validated['id_krs'])->whereNull('deleted_at')->first();
         $angkaMutu = $validated['angka_mutu'] ?? $nilai?->angka_mutu;
 
-        if (!$nilai) {
+        if (! $nilai) {
             $nilaiBaru = [
                 'id_krs' => $validated['id_krs'],
                 'sks' => $sks ?: null,
@@ -1155,16 +1175,16 @@ class NilaiController extends Controller
             'semester',
         ])->find($idKelas);
 
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json([
-                'message' => 'Kelas tidak ditemukan'
+                'message' => 'Kelas tidak ditemukan',
             ], 404);
         }
 
         $user = $request->user();
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
-            if ($allowedProdiIds !== null && !in_array((int) $kelas->id_prodi, $allowedProdiIds, true)) {
+            if ($allowedProdiIds !== null && ! in_array((int) $kelas->id_prodi, $allowedProdiIds, true)) {
                 abort(403, 'Anda tidak memiliki akses ke data nilai kelas ini.');
             }
         }
@@ -1174,18 +1194,18 @@ class NilaiController extends Controller
             'mahasiswa.prodi',
             'mahasiswa.semester_masuk',
         ])
-        ->join('mahasiswa', 'krs.id_mahasiswa', '=', 'mahasiswa.id')
-        ->where('krs.id_kelas', $idKelas)
-        ->whereNull('krs.deleted_at')
-        ->whereNull('mahasiswa.deleted_at')
-        ->select('krs.*')
-        ->orderBy('mahasiswa.nim')
-        ->get();
+            ->join('mahasiswa', 'krs.id_mahasiswa', '=', 'mahasiswa.id')
+            ->where('krs.id_kelas', $idKelas)
+            ->whereNull('krs.deleted_at')
+            ->whereNull('mahasiswa.deleted_at')
+            ->select('krs.*')
+            ->orderBy('mahasiswa.nim')
+            ->get();
 
         // Ambil nilai komponen untuk semua KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiKomponenMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiKomponenList = DB::table('nilai_komponen')
                 ->join('jenis_penilaian', 'nilai_komponen.id_jenis_penilaian', '=', 'jenis_penilaian.id')
                 ->whereIn('nilai_komponen.id_krs', $krsIds)
@@ -1203,7 +1223,7 @@ class NilaiController extends Controller
 
         // Ambil nilai (angka_mutu dan huruf_mutu) untuk semua KRS
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->get()
@@ -1212,7 +1232,7 @@ class NilaiController extends Controller
         }
 
         // Ambil jenis penilaian untuk referensi
-        $jenisPenilaianList = \App\Models\JenisPenilaian::whereNull('deleted_at')
+        $jenisPenilaianList = JenisPenilaian::whereNull('deleted_at')
             ->orderBy('nama')
             ->get();
 
@@ -1248,17 +1268,17 @@ class NilaiController extends Controller
         // Ambil data mata kuliah dari kurikulum_matkul dengan fallback ke matkul
         $kurikulumMatkul = $kelas->kurikulumMatkul;
         $matkul = $kurikulumMatkul?->matkul;
-        
+
         // Kode mata kuliah: prioritas dari kurikulum_matkul, jika kosong ambil dari matkul
-        $kodeMatkul = (!empty($kurikulumMatkul?->kode_matkul) && trim($kurikulumMatkul->kode_matkul) !== '') 
-            ? $kurikulumMatkul->kode_matkul 
+        $kodeMatkul = (! empty($kurikulumMatkul?->kode_matkul) && trim($kurikulumMatkul->kode_matkul) !== '')
+            ? $kurikulumMatkul->kode_matkul
             : ($matkul?->kode ?? '-');
-        
+
         // Nama mata kuliah: prioritas dari kurikulum_matkul, jika kosong ambil dari matkul
-        $namaMatkul = (!empty($kurikulumMatkul?->nama_matkul) && trim($kurikulumMatkul->nama_matkul) !== '') 
-            ? $kurikulumMatkul->nama_matkul 
+        $namaMatkul = (! empty($kurikulumMatkul?->nama_matkul) && trim($kurikulumMatkul->nama_matkul) !== '')
+            ? $kurikulumMatkul->nama_matkul
             : ($matkul?->nama ?? '-');
-        
+
         // SKS: prioritas dari kurikulum_matkul, jika kosong ambil dari matkul
         $sks = $kurikulumMatkul?->sks ?? $matkul?->sks ?? 0;
 
@@ -1302,42 +1322,42 @@ class NilaiController extends Controller
     public function kalkulasiNilaiKehadiran(Request $request, int $idKelas): JsonResponse
     {
         $user = $request->user();
-        
+
         // Ambil data dosen dari user yang login (jika role dosen)
         $dosen = null;
         $idDosen = null;
-        
+
         if ($user->role === 'dosen') {
             $dosen = Dosen::where('id_user', $user->id)->first();
             if ($dosen) {
                 $idDosen = $dosen->id;
             }
         }
-        
+
         // Ambil data kelas
         $kelas = Kelas::find($idKelas);
-        if (!$kelas) {
+        if (! $kelas) {
             return response()->json([
-                'message' => 'Kelas tidak ditemukan'
+                'message' => 'Kelas tidak ditemukan',
             ], 404);
         }
 
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
-            if ($allowedProdiIds !== null && !in_array((int) $kelas->id_prodi, $allowedProdiIds, true)) {
+            if ($allowedProdiIds !== null && ! in_array((int) $kelas->id_prodi, $allowedProdiIds, true)) {
                 abort(403, 'Anda tidak memiliki akses ke kelas ini.');
             }
         }
-        
+
         // Jika id_dosen belum ada (admin), ambil dari dosen PIC kelas
-        if (!$idDosen && $kelas->id_dosen_pic) {
+        if (! $idDosen && $kelas->id_dosen_pic) {
             $idDosen = $kelas->id_dosen_pic;
         }
-        
+
         // Jika masih belum ada id_dosen, return error
-        if (!$idDosen) {
+        if (! $idDosen) {
             return response()->json([
-                'message' => 'Tidak dapat menentukan dosen untuk menyimpan nilai. Pastikan kelas memiliki dosen PIC atau Anda login sebagai dosen.'
+                'message' => 'Tidak dapat menentukan dosen untuk menyimpan nilai. Pastikan kelas memiliki dosen PIC atau Anda login sebagai dosen.',
             ], 400);
         }
 
@@ -1345,26 +1365,26 @@ class NilaiController extends Controller
         $jenisPenilaianKehadiran = JenisPenilaian::whereNull('deleted_at')
             ->where(function ($q) {
                 $q->where('kode', 'PRESENSI')
-                  ->orWhere('nama', 'like', '%presensi%')
-                  ->orWhere('nama', 'like', '%kehadiran%');
+                    ->orWhere('nama', 'like', '%presensi%')
+                    ->orWhere('nama', 'like', '%kehadiran%');
             })
             ->first();
 
-        if (!$jenisPenilaianKehadiran) {
+        if (! $jenisPenilaianKehadiran) {
             return response()->json([
-                'message' => 'Jenis penilaian untuk kehadiran tidak ditemukan. Pastikan ada jenis penilaian dengan kode KEHADIRAN atau HADIR.'
+                'message' => 'Jenis penilaian untuk kehadiran tidak ditemukan. Pastikan ada jenis penilaian dengan kode KEHADIRAN atau HADIR.',
             ], 404);
         }
 
         // Ambil semua jadwal untuk kelas ini
-        $jadwalList = \App\Models\Jadwal::where('id_kelas', $idKelas)
+        $jadwalList = Jadwal::where('id_kelas', $idKelas)
             ->whereNull('deleted_at')
             ->pluck('id')
             ->toArray();
 
         if (empty($jadwalList)) {
             return response()->json([
-                'message' => 'Belum ada jadwal untuk kelas ini.'
+                'message' => 'Belum ada jadwal untuk kelas ini.',
             ], 400);
         }
 
@@ -1375,7 +1395,7 @@ class NilaiController extends Controller
 
         if ($perkuliahanList->isEmpty()) {
             return response()->json([
-                'message' => 'Belum ada perkuliahan yang dilaksanakan untuk kelas ini.'
+                'message' => 'Belum ada perkuliahan yang dilaksanakan untuk kelas ini.',
             ], 400);
         }
 
@@ -1389,7 +1409,7 @@ class NilaiController extends Controller
 
         if ($krsList->isEmpty()) {
             return response()->json([
-                'message' => 'Belum ada mahasiswa yang mengambil kelas ini.'
+                'message' => 'Belum ada mahasiswa yang mengambil kelas ini.',
             ], 400);
         }
 
@@ -1416,10 +1436,10 @@ class NilaiController extends Controller
             foreach ($krsList as $krs) {
                 $idMahasiswa = $krs->id_mahasiswa;
                 $jumlahHadir = $kehadiranList[$idMahasiswa] ?? 0;
-                
+
                 // Hitung persentase kehadiran
-                $persentaseKehadiran = $jumlahPerkuliahan > 0 
-                    ? round(($jumlahHadir / $jumlahPerkuliahan) * 100, 2) 
+                $persentaseKehadiran = $jumlahPerkuliahan > 0
+                    ? round(($jumlahHadir / $jumlahPerkuliahan) * 100, 2)
                     : 0;
 
                 // Cek apakah nilai komponen sudah ada
@@ -1461,12 +1481,13 @@ class NilaiController extends Controller
                     'jumlah_perkuliahan' => $jumlahPerkuliahan,
                     'berhasil' => $successCount,
                     'gagal' => $errorCount,
-                ]
+                ],
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
-                'message' => 'Gagal melakukan kalkulasi nilai kehadiran: ' . $e->getMessage()
+                'message' => 'Gagal melakukan kalkulasi nilai kehadiran: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -1483,19 +1504,19 @@ class NilaiController extends Controller
         ]);
 
         $user = $request->user();
-        $dosen = \App\Models\Dosen::where('id_user', $user->id)->first();
-        
-        if (!$dosen) {
+        $dosen = Dosen::where('id_user', $user->id)->first();
+
+        if (! $dosen) {
             return response()->json([
-                'message' => 'Data dosen tidak ditemukan'
+                'message' => 'Data dosen tidak ditemukan',
             ], 404);
         }
 
         // Verifikasi bahwa dosen memiliki akses ke KRS ini
         $krs = Krs::with('kelas')->find($validated['id_krs']);
-        if (!$krs) {
+        if (! $krs) {
             return response()->json([
-                'message' => 'KRS tidak ditemukan'
+                'message' => 'KRS tidak ditemukan',
             ], 404);
         }
 
@@ -1504,22 +1525,32 @@ class NilaiController extends Controller
         if ($kelas->id_dosen_pic === $dosen->id) {
             $hasAccess = true;
         } else {
-            $hasJadwal = \App\Models\JadwalDosen::whereHas('jadwal', function ($q) use ($kelas) {
+            $hasJadwal = JadwalDosen::whereHas('jadwal', function ($q) use ($kelas) {
                 $q->where('id_kelas', $kelas->id);
             })
-            ->where('id_dosen', $dosen->id)
-            ->where('status', 'active')
-            ->exists();
+                ->where('id_dosen', $dosen->id)
+                ->where('status', 'active')
+                ->exists();
 
             if ($hasJadwal) {
                 $hasAccess = true;
             }
         }
 
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json([
-                'message' => 'Anda tidak memiliki akses ke kelas ini'
+                'message' => 'Anda tidak memiliki akses ke kelas ini',
             ], 403);
+        }
+
+        // Sama persis dengan App\Livewire\Dosen\Nilai\Input::save — lihat
+        // App\Services\KalenderAkademikGateService untuk perilaku fail-open kalau belum ada
+        // event kalender untuk semester ini.
+        $periodeNilai = KalenderAkademikGateService::isPeriodeAktif('nilai', $kelas->id_semester);
+        if (! $periodeNilai['allowed']) {
+            return response()->json([
+                'message' => $periodeNilai['alasan'] ?? 'Pengisian nilai sedang tidak dibuka.',
+            ], 422);
         }
 
         // Cek apakah nilai komponen sudah ada
@@ -1575,17 +1606,17 @@ class NilaiController extends Controller
         // Ambil detail mahasiswa
         $mahasiswa = Mahasiswa::with([
             'prodi',
-            'semester_masuk'
+            'semester_masuk',
         ])->find($idMahasiswa);
 
-        if (!$mahasiswa) {
+        if (! $mahasiswa) {
             return response()->json(['message' => 'Mahasiswa tidak ditemukan'], 404);
         }
 
         $user = $request->user();
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
-            if ($allowedProdiIds !== null && !in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
+            if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                 abort(403, 'Anda tidak memiliki akses ke data nilai mahasiswa ini.');
             }
         }
@@ -1597,8 +1628,8 @@ class NilaiController extends Controller
             'kelas.prodi',
             'kelas.semester',
         ])
-        ->where('id_mahasiswa', $idMahasiswa)
-        ->whereNull('krs.deleted_at');
+            ->where('id_mahasiswa', $idMahasiswa)
+            ->whereNull('krs.deleted_at');
 
         // Filter berdasarkan semester
         if ($semesterId) {
@@ -1611,7 +1642,7 @@ class NilaiController extends Controller
         if ($search) {
             $query->whereHas('kelas.kurikulumMatkul.matkul', function ($q) use ($search) {
                 $q->where('nama', 'like', "%{$search}%")
-                  ->orWhere('kode', 'like', "%{$search}%");
+                    ->orWhere('kode', 'like', "%{$search}%");
             });
         }
 
@@ -1620,7 +1651,7 @@ class NilaiController extends Controller
         // Ambil nilai untuk setiap KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->get()
@@ -1688,17 +1719,17 @@ class NilaiController extends Controller
         // Ambil detail mahasiswa
         $mahasiswa = Mahasiswa::with([
             'prodi',
-            'semester_masuk'
+            'semester_masuk',
         ])->find($idMahasiswa);
 
-        if (!$mahasiswa) {
+        if (! $mahasiswa) {
             return response()->json(['message' => 'Mahasiswa tidak ditemukan'], 404);
         }
 
         $user = $request->user();
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
-            if ($allowedProdiIds !== null && !in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
+            if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                 abort(403, 'Anda tidak memiliki akses ke data nilai mahasiswa ini.');
             }
         }
@@ -1709,20 +1740,20 @@ class NilaiController extends Controller
             'kelas.kurikulumMatkul.kurikulum',
             'kelas.prodi',
             'kelas.semester',
-            'kelas.dosenPic'
+            'kelas.dosenPic',
         ])
-        ->where('id_mahasiswa', $idMahasiswa)
-        ->whereNotNull('approved_at') // Hanya KRS yang sudah disetujui
-        ->whereNull('deleted_at')
-        ->orderBy('created_at', 'desc')
-        ->get();
+            ->where('id_mahasiswa', $idMahasiswa)
+            ->whereNotNull('approved_at') // Hanya KRS yang sudah disetujui
+            ->whereNull('deleted_at')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         $krsList = UrutanMatkulService::urutkanKrs($krsList);
 
         // Ambil nilai untuk setiap KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->get()
@@ -1732,17 +1763,17 @@ class NilaiController extends Controller
 
         // Kelompokkan nilai berdasarkan semester
         $nilaiBySemester = [];
-        
+
         foreach ($krsList as $krs) {
             $semester = $krs->kelas->semester;
-            
-            if (!$semester) {
+
+            if (! $semester) {
                 continue;
             }
-            
+
             $semesterId = $semester->id;
-            
-            if (!isset($nilaiBySemester[$semesterId])) {
+
+            if (! isset($nilaiBySemester[$semesterId])) {
                 $nilaiBySemester[$semesterId] = [
                     'semester' => [
                         'id' => $semester->id,
@@ -1755,19 +1786,19 @@ class NilaiController extends Controller
                     'total_sks_dengan_nilai' => 0,
                 ];
             }
-            
+
             $matkul = $krs->kelas->kurikulumMatkul->matkul ?? null;
             $sks = $matkul->sks ?? 0;
             $nilai = isset($nilaiMap[$krs->id]) ? $nilaiMap[$krs->id] : null;
-            
+
             $nilaiBySemester[$semesterId]['total_sks'] += $sks;
-            
+
             if ($nilai) {
                 $angkaMutu = $nilai['angka_mutu'] ?? 0;
                 $nilaiBySemester[$semesterId]['total_angka_mutu'] += ($angkaMutu * $sks);
                 $nilaiBySemester[$semesterId]['total_sks_dengan_nilai'] += $sks;
             }
-            
+
             $nilaiBySemester[$semesterId]['nilai_list'][] = [
                 'id' => $krs->id,
                 'id_krs' => $krs->id,
@@ -1827,7 +1858,7 @@ class NilaiController extends Controller
                     'nama' => $mahasiswa->semester_masuk->nama,
                 ] : null,
             ],
-            'data' => array_values($nilaiBySemester)
+            'data' => array_values($nilaiBySemester),
         ]);
     }
 
@@ -1843,7 +1874,7 @@ class NilaiController extends Controller
         }
 
         $mahasiswa = Mahasiswa::with(['prodi', 'semester_masuk'])->find($idMahasiswa);
-        if (!$mahasiswa || !in_array($mahasiswa->id_prodi, $prodiScopeIds)) {
+        if (! $mahasiswa || ! in_array($mahasiswa->id_prodi, $prodiScopeIds)) {
             return response()->json(['message' => 'Mahasiswa tidak ditemukan'], 404);
         }
 
@@ -1852,19 +1883,19 @@ class NilaiController extends Controller
             'kelas.kurikulumMatkul.kurikulum',
             'kelas.prodi',
             'kelas.semester',
-            'kelas.dosenPic'
+            'kelas.dosenPic',
         ])
-        ->where('id_mahasiswa', $idMahasiswa)
-        ->whereNotNull('approved_at')
-        ->whereNull('deleted_at')
-        ->orderBy('created_at', 'desc')
-        ->get();
+            ->where('id_mahasiswa', $idMahasiswa)
+            ->whereNotNull('approved_at')
+            ->whereNull('deleted_at')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         $krsList = UrutanMatkulService::urutkanKrs($krsList);
 
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)->whereNull('deleted_at')->get()->keyBy('id_krs');
             $nilaiMap = $nilaiList->toArray();
         }
@@ -1872,11 +1903,11 @@ class NilaiController extends Controller
         $nilaiBySemester = [];
         foreach ($krsList as $krs) {
             $semester = $krs->kelas->semester;
-            if (!$semester) {
+            if (! $semester) {
                 continue;
             }
             $semesterId = $semester->id;
-            if (!isset($nilaiBySemester[$semesterId])) {
+            if (! isset($nilaiBySemester[$semesterId])) {
                 $nilaiBySemester[$semesterId] = [
                     'semester' => [
                         'id' => $semester->id,
@@ -1970,7 +2001,7 @@ class NilaiController extends Controller
 
         // Ambil KRS untuk mendapatkan SKS dari mata kuliah jika SKS tidak diisi
         $krs = Krs::with(['kelas.kurikulumMatkul.matkul', 'mahasiswa'])->find($validated['id_krs']);
-        if (!$krs) {
+        if (! $krs) {
             return response()->json(['message' => 'KRS tidak ditemukan'], 404);
         }
 
@@ -1979,14 +2010,14 @@ class NilaiController extends Controller
             $mahasiswa = $krs->mahasiswa ?? Mahasiswa::find($krs->id_mahasiswa);
             if ($mahasiswa) {
                 $allowedProdiIds = $user->getAllowedProdiIds();
-                if ($allowedProdiIds !== null && !in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
+                if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                     abort(403, 'Anda tidak memiliki akses ke data nilai ini.');
                 }
             }
         }
 
         // Jika SKS tidak diisi, ambil dari mata kuliah
-        if (!isset($validated['sks']) && $krs->kelas && $krs->kelas->kurikulumMatkul && $krs->kelas->kurikulumMatkul->matkul) {
+        if (! isset($validated['sks']) && $krs->kelas && $krs->kelas->kurikulumMatkul && $krs->kelas->kurikulumMatkul->matkul) {
             $validated['sks'] = $krs->kelas->kurikulumMatkul->matkul->sks;
         }
 
@@ -2091,7 +2122,7 @@ class NilaiController extends Controller
             ->whereNull('deleted_at')
             ->first();
 
-        if (!$nilai) {
+        if (! $nilai) {
             return response()->json(['message' => 'Nilai tidak ditemukan'], 404);
         }
 
@@ -2100,7 +2131,7 @@ class NilaiController extends Controller
             $user = $request->user();
             if ($user && $user->hasScopeRestriction()) {
                 $allowedProdiIds = $user->getAllowedProdiIds();
-                if ($allowedProdiIds !== null && !in_array((int) $krs->mahasiswa->id_prodi, $allowedProdiIds, true)) {
+                if ($allowedProdiIds !== null && ! in_array((int) $krs->mahasiswa->id_prodi, $allowedProdiIds, true)) {
                     abort(403, 'Anda tidak memiliki akses ke data nilai ini.');
                 }
             }
@@ -2113,7 +2144,7 @@ class NilaiController extends Controller
     {
         // Termasuk soft-deleted: setelah hapus, klien mungkin masih mengirim PUT ke id yang sama; restore lalu update.
         $nilai = Nilai::withTrashed()->with('krs.mahasiswa')->find($id);
-        if (!$nilai) {
+        if (! $nilai) {
             return response()->json(['message' => 'Nilai tidak ditemukan'], 404);
         }
 
@@ -2122,7 +2153,7 @@ class NilaiController extends Controller
             $krs = $nilai->krs ?? Krs::with('mahasiswa')->find($nilai->id_krs);
             if ($krs && $krs->mahasiswa) {
                 $allowedProdiIds = $user->getAllowedProdiIds();
-                if ($allowedProdiIds !== null && !in_array((int) $krs->mahasiswa->id_prodi, $allowedProdiIds, true)) {
+                if ($allowedProdiIds !== null && ! in_array((int) $krs->mahasiswa->id_prodi, $allowedProdiIds, true)) {
                     abort(403, 'Anda tidak memiliki akses ke data nilai ini.');
                 }
             }
@@ -2288,7 +2319,7 @@ class NilaiController extends Controller
 
     public function downloadTemplate(): StreamedResponse
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
 
         $headers = [
@@ -2314,10 +2345,10 @@ class NilaiController extends Controller
         $headerStyle = [
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => [
-                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'fillType' => Fill::FILL_SOLID,
                 'startColor' => ['rgb' => '4472C4'],
             ],
-            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
         $sheet->getStyle('A1:F1')->applyFromArray($headerStyle);
 
@@ -2332,14 +2363,14 @@ class NilaiController extends Controller
         ];
         $sheet->fromArray([$exampleRow], null, 'A2');
 
-        $filename = 'template_import_nilai_' . date('YmdHis') . '.xlsx';
+        $filename = 'template_import_nilai_'.date('YmdHis').'.xlsx';
 
         return new StreamedResponse(function () use ($spreadsheet) {
             $writer = new Xlsx($spreadsheet);
             $writer->save('php://output');
         }, 200, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment;filename="' . $filename . '"',
+            'Content-Disposition' => 'attachment;filename="'.$filename.'"',
             'Cache-Control' => 'max-age=0',
         ]);
     }
@@ -2390,23 +2421,27 @@ class NilaiController extends Controller
                 // Validate required fields
                 if (empty($nim)) {
                     $errors[] = "Baris {$rowNumber}: NIM wajib diisi.";
+
                     continue;
                 }
 
                 if (empty($kodeMatkul)) {
                     $errors[] = "Baris {$rowNumber}: Kode Mata Kuliah wajib diisi.";
+
                     continue;
                 }
 
                 if (empty($kodeSemester)) {
                     $errors[] = "Baris {$rowNumber}: Kode Semester wajib diisi.";
+
                     continue;
                 }
 
                 // Find mahasiswa by NIM
                 $mahasiswa = Mahasiswa::where('nim', $nim)->first();
-                if (!$mahasiswa) {
+                if (! $mahasiswa) {
                     $errors[] = "Baris {$rowNumber}: Mahasiswa dengan NIM '{$nim}' tidak ditemukan.";
+
                     continue;
                 }
 
@@ -2417,15 +2452,17 @@ class NilaiController extends Controller
                 // ke kurikulum prodi lain — kelasnya dilaporkan "tidak ditemukan" padahal ada.
                 $matkul = Matkul::where('kode', $kodeMatkul)->where('id_prodi', $mahasiswa->id_prodi)->first()
                     ?: Matkul::where('kode', $kodeMatkul)->first();
-                if (!$matkul) {
+                if (! $matkul) {
                     $errors[] = "Baris {$rowNumber}: Mata kuliah dengan kode '{$kodeMatkul}' tidak ditemukan.";
+
                     continue;
                 }
 
                 // Find semester by kode
                 $semester = Semester::where('kode', $kodeSemester)->first();
-                if (!$semester) {
+                if (! $semester) {
                     $errors[] = "Baris {$rowNumber}: Semester dengan kode '{$kodeSemester}' tidak ditemukan.";
+
                     continue;
                 }
 
@@ -2433,6 +2470,7 @@ class NilaiController extends Controller
                 $kurikulumMatkulList = KurikulumMatkul::where('id_matkul', $matkul->id)->get();
                 if ($kurikulumMatkulList->isEmpty()) {
                     $errors[] = "Baris {$rowNumber}: Mata kuliah '{$kodeMatkul}' tidak ditemukan dalam kurikulum.";
+
                     continue;
                 }
 
@@ -2479,8 +2517,9 @@ class NilaiController extends Controller
                 $user = $request->user();
                 if ($user && $user->hasScopeRestriction()) {
                     $allowedProdiIds = $user->getAllowedProdiIds();
-                    if ($allowedProdiIds !== null && !in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
+                    if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                         $errors[] = "Baris {$rowNumber}: Anda tidak memiliki akses ke mahasiswa NIM '{$nim}' (prodi di luar scope).";
+
                         continue;
                     }
                 }
@@ -2492,17 +2531,18 @@ class NilaiController extends Controller
                 ];
 
                 // Process angka_mutu
-                if (!empty($angkaMutu)) {
+                if (! empty($angkaMutu)) {
                     $angkaMutuValue = filter_var($angkaMutu, FILTER_VALIDATE_FLOAT);
                     if ($angkaMutuValue === false) {
                         $errors[] = "Baris {$rowNumber}: Angka Mutu '{$angkaMutu}' tidak valid.";
+
                         continue;
                     }
                     $nilaiData['angka_mutu'] = $angkaMutuValue;
                 }
 
                 // Process huruf_mutu
-                if (!empty($hurufMutu)) {
+                if (! empty($hurufMutu)) {
                     $nilaiData['huruf_mutu'] = strtoupper($hurufMutu);
                 }
 
@@ -2560,7 +2600,7 @@ class NilaiController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Import selesai. Berhasil: {$successCount}, Diperbarui: {$skipCount}, Error: " . count($errors),
+                'message' => "Import selesai. Berhasil: {$successCount}, Diperbarui: {$skipCount}, Error: ".count($errors),
                 'success_count' => $successCount,
                 'updated_count' => $skipCount,
                 'error_count' => count($errors),
@@ -2569,9 +2609,10 @@ class NilaiController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => 'Terjadi kesalahan saat mengimpor data: ' . $e->getMessage(),
+                'message' => 'Terjadi kesalahan saat mengimpor data: '.$e->getMessage(),
                 'errors' => $errors,
             ], 500);
         }
@@ -2583,13 +2624,13 @@ class NilaiController extends Controller
     public function getTranskripMahasiswa(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         // Ambil data mahasiswa dari user
         $mahasiswa = Mahasiswa::where('id_user', $user->id)->first();
-        
-        if (!$mahasiswa) {
+
+        if (! $mahasiswa) {
             return response()->json([
-                'message' => 'Data mahasiswa tidak ditemukan'
+                'message' => 'Data mahasiswa tidak ditemukan',
             ], 404);
         }
 
@@ -2597,20 +2638,20 @@ class NilaiController extends Controller
         $krsList = Krs::with([
             'kelas.kurikulumMatkul.matkul',
             'kelas.semester',
-            'kelas.prodi'
+            'kelas.prodi',
         ])
-        ->where('id_mahasiswa', $mahasiswa->id)
-        ->whereNotNull('approved_at') // Hanya KRS yang sudah disetujui
-        ->whereNull('deleted_at')
-        ->orderBy('created_at', 'asc')
-        ->get();
+            ->where('id_mahasiswa', $mahasiswa->id)
+            ->whereNotNull('approved_at') // Hanya KRS yang sudah disetujui
+            ->whereNull('deleted_at')
+            ->orderBy('created_at', 'asc')
+            ->get();
 
         $krsList = UrutanMatkulService::urutkanKrs($krsList);
 
         // Ambil nilai untuk setiap KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->where('is_final', true)
@@ -2629,8 +2670,8 @@ class NilaiController extends Controller
             $matkul = $krs->kelas->kurikulumMatkul->matkul ?? null;
             $semester = $krs->kelas->semester ?? null;
             $nilai = isset($nilaiMap[$krs->id]) ? $nilaiMap[$krs->id] : null;
-            
-            if (!$matkul || !$semester) {
+
+            if (! $matkul || ! $semester) {
                 continue;
             }
 
@@ -2640,12 +2681,12 @@ class NilaiController extends Controller
             $angkaMutu = null;
             $hurufMutu = null;
             $isFinal = false;
-            
+
             if ($nilai) {
                 $angkaMutu = $nilai['angka_mutu'];
                 $hurufMutu = $nilai['huruf_mutu'];
                 $isFinal = $nilai['is_final'] ?? false;
-                
+
                 // Hitung untuk IP (hanya yang sudah final)
                 if ($isFinal && $angkaMutu !== null && $sks > 0) {
                     $totalAngkaMutu += ($angkaMutu * $sks);
@@ -2654,7 +2695,7 @@ class NilaiController extends Controller
             }
 
             $semesterId = $semester->id;
-            if (!isset($transkripData[$semesterId])) {
+            if (! isset($transkripData[$semesterId])) {
                 $transkripData[$semesterId] = [
                     'semester' => [
                         'id' => $semester->id,
@@ -2921,13 +2962,13 @@ class NilaiController extends Controller
     public function getIpPerSemester(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         // Ambil data mahasiswa dari user
         $mahasiswa = Mahasiswa::where('id_user', $user->id)->first();
-        
-        if (!$mahasiswa) {
+
+        if (! $mahasiswa) {
             return response()->json([
-                'message' => 'Data mahasiswa tidak ditemukan'
+                'message' => 'Data mahasiswa tidak ditemukan',
             ], 404);
         }
 
@@ -2936,18 +2977,18 @@ class NilaiController extends Controller
             'kelas.kurikulumMatkul.matkul',
             'kelas.semester',
         ])
-        ->where('id_mahasiswa', $mahasiswa->id)
-        ->whereNotNull('approved_at')
-        ->whereNull('deleted_at')
-        ->orderBy('created_at', 'asc')
-        ->get();
+            ->where('id_mahasiswa', $mahasiswa->id)
+            ->whereNotNull('approved_at')
+            ->whereNull('deleted_at')
+            ->orderBy('created_at', 'asc')
+            ->get();
 
         $krsList = UrutanMatkulService::urutkanKrs($krsList);
 
         // Ambil nilai untuk setiap KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->get()
@@ -2957,20 +2998,20 @@ class NilaiController extends Controller
 
         // Kelompokkan berdasarkan semester dan hitung IP
         $ipBySemester = [];
-        
+
         foreach ($krsList as $krs) {
             $matkul = $krs->kelas->kurikulumMatkul->matkul ?? null;
             $semester = $krs->kelas->semester ?? null;
             $nilai = isset($nilaiMap[$krs->id]) ? $nilaiMap[$krs->id] : null;
-            
-            if (!$matkul || !$semester) {
+
+            if (! $matkul || ! $semester) {
                 continue;
             }
 
             $sks = $matkul->sks ?? 0;
             $semesterId = $semester->id;
-            
-            if (!isset($ipBySemester[$semesterId])) {
+
+            if (! isset($ipBySemester[$semesterId])) {
                 $ipBySemester[$semesterId] = [
                     'semester' => [
                         'id' => $semester->id,
@@ -2995,7 +3036,7 @@ class NilaiController extends Controller
             if ($data['total_sks_dengan_nilai'] > 0) {
                 $ip = round($data['total_angka_mutu'] / $data['total_sks_dengan_nilai'], 2);
             }
-            
+
             $result[] = [
                 'semester' => $data['semester'],
                 'ip' => $ip,
@@ -3198,17 +3239,17 @@ class NilaiController extends Controller
         // Ambil detail mahasiswa
         $mahasiswa = Mahasiswa::with([
             'prodi',
-            'semester_masuk'
+            'semester_masuk',
         ])->find($idMahasiswa);
 
-        if (!$mahasiswa) {
+        if (! $mahasiswa) {
             throw new \Exception('Mahasiswa tidak ditemukan');
         }
 
         $user = $request->user();
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
-            if ($allowedProdiIds !== null && !in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
+            if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                 abort(403, 'Anda tidak memiliki akses ke data nilai mahasiswa ini.');
             }
         }
@@ -3220,8 +3261,8 @@ class NilaiController extends Controller
             'kelas.prodi',
             'kelas.semester',
         ])
-        ->where('id_mahasiswa', $idMahasiswa)
-        ->whereNull('krs.deleted_at');
+            ->where('id_mahasiswa', $idMahasiswa)
+            ->whereNull('krs.deleted_at');
 
         // Filter berdasarkan semester
         if ($semesterId) {
@@ -3234,7 +3275,7 @@ class NilaiController extends Controller
         if ($search) {
             $query->whereHas('kelas.kurikulumMatkul.matkul', function ($q) use ($search) {
                 $q->where('nama', 'like', "%{$search}%")
-                  ->orWhere('kode', 'like', "%{$search}%");
+                    ->orWhere('kode', 'like', "%{$search}%");
             });
         }
 
@@ -3243,7 +3284,7 @@ class NilaiController extends Controller
         // Ambil nilai untuk setiap KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->where('is_final', true)
@@ -3253,35 +3294,35 @@ class NilaiController extends Controller
         }
 
         // Buat spreadsheet
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Nilai Mahasiswa');
 
         // Header informasi mahasiswa
         $row = 1;
-        $sheet->setCellValue('A' . $row, 'LAPORAN NILAI MAHASISWA');
-        $sheet->mergeCells('A' . $row . ':F' . $row);
-        $sheet->getStyle('A' . $row)->getFont()->setBold(true)->setSize(14);
+        $sheet->setCellValue('A'.$row, 'LAPORAN NILAI MAHASISWA');
+        $sheet->mergeCells('A'.$row.':F'.$row);
+        $sheet->getStyle('A'.$row)->getFont()->setBold(true)->setSize(14);
         $row++;
 
-        $sheet->setCellValue('A' . $row, 'NIM:');
-        $sheet->setCellValue('B' . $row, $mahasiswa->nim);
+        $sheet->setCellValue('A'.$row, 'NIM:');
+        $sheet->setCellValue('B'.$row, $mahasiswa->nim);
         $row++;
 
-        $sheet->setCellValue('A' . $row, 'Nama:');
-        $sheet->setCellValue('B' . $row, $mahasiswa->nama);
+        $sheet->setCellValue('A'.$row, 'Nama:');
+        $sheet->setCellValue('B'.$row, $mahasiswa->nama);
         $row++;
 
-        $sheet->setCellValue('A' . $row, 'Program Studi:');
-        $sheet->setCellValue('B' . $row, $mahasiswa->prodi?->nama ?? '-');
+        $sheet->setCellValue('A'.$row, 'Program Studi:');
+        $sheet->setCellValue('B'.$row, $mahasiswa->prodi?->nama ?? '-');
         $row++;
 
-        $sheet->setCellValue('A' . $row, 'Semester Masuk:');
-        $sheet->setCellValue('B' . $row, $mahasiswa->semester_masuk?->nama ?? '-');
+        $sheet->setCellValue('A'.$row, 'Semester Masuk:');
+        $sheet->setCellValue('B'.$row, $mahasiswa->semester_masuk?->nama ?? '-');
         $row++;
 
-        $sheet->setCellValue('A' . $row, 'Tanggal Export:');
-        $sheet->setCellValue('B' . $row, date('d/m/Y H:i:s'));
+        $sheet->setCellValue('A'.$row, 'Tanggal Export:');
+        $sheet->setCellValue('B'.$row, date('d/m/Y H:i:s'));
         $row += 2;
 
         // Header tabel
@@ -3295,19 +3336,19 @@ class NilaiController extends Controller
             'Angka Mutu',
             'Status',
         ];
-        $sheet->fromArray([$headers], null, 'A' . $row);
+        $sheet->fromArray([$headers], null, 'A'.$row);
 
         // Style header
         $headerStyle = [
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => [
-                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'fillType' => Fill::FILL_SOLID,
                 'startColor' => ['rgb' => '4472C4'],
             ],
-            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
-        $lastHeaderCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
-        $sheet->getStyle('A' . $row . ':' . $lastHeaderCol . $row)->applyFromArray($headerStyle);
+        $lastHeaderCol = Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle('A'.$row.':'.$lastHeaderCol.$row)->applyFromArray($headerStyle);
 
         // Data rows
         $row++;
@@ -3317,27 +3358,27 @@ class NilaiController extends Controller
             $semester = $krs->kelas->semester ?? null;
             $nilai = isset($nilaiMap[$krs->id]) ? $nilaiMap[$krs->id] : null;
 
-            $sheet->setCellValue('A' . $row, $no);
-            $sheet->setCellValue('B' . $row, $matkul?->kode ?? '-');
-            $sheet->setCellValue('C' . $row, $matkul?->nama ?? '-');
-            $sheet->setCellValue('D' . $row, $matkul?->sks ?? '-');
-            $sheet->setCellValue('E' . $row, $semester?->nama ?? '-');
-            $sheet->setCellValue('F' . $row, $nilai && isset($nilai['huruf_mutu']) ? $nilai['huruf_mutu'] : '-');
-            $sheet->setCellValue('G' . $row, $nilai && isset($nilai['angka_mutu']) ? $nilai['angka_mutu'] : '-');
+            $sheet->setCellValue('A'.$row, $no);
+            $sheet->setCellValue('B'.$row, $matkul?->kode ?? '-');
+            $sheet->setCellValue('C'.$row, $matkul?->nama ?? '-');
+            $sheet->setCellValue('D'.$row, $matkul?->sks ?? '-');
+            $sheet->setCellValue('E'.$row, $semester?->nama ?? '-');
+            $sheet->setCellValue('F'.$row, $nilai && isset($nilai['huruf_mutu']) ? $nilai['huruf_mutu'] : '-');
+            $sheet->setCellValue('G'.$row, $nilai && isset($nilai['angka_mutu']) ? $nilai['angka_mutu'] : '-');
             $statusNilai = '-';
             if ($nilai) {
                 $statusNilai = (isset($nilai['is_final']) && $nilai['is_final']) ? 'Final' : 'Belum Final';
             } else {
                 $statusNilai = 'Belum Ada Nilai';
             }
-            $sheet->setCellValue('H' . $row, $statusNilai);
+            $sheet->setCellValue('H'.$row, $statusNilai);
 
             // Center align untuk kolom tertentu
-            $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle('D' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle('F' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle('G' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle('H' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('A'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('D'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('F'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('G'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('H'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
             $row++;
             $no++;
@@ -3354,7 +3395,7 @@ class NilaiController extends Controller
         $sheet->getColumnDimension('H')->setWidth(18);
 
         // Auto filter
-        $sheet->setAutoFilter('A' . ($row - $no) . ':' . $lastHeaderCol . ($row - 1));
+        $sheet->setAutoFilter('A'.($row - $no).':'.$lastHeaderCol.($row - 1));
 
         $nimPart = trim((string) $mahasiswa->nim);
         $nimPart = str_replace([' ', "\t", "\n", "\r"], '_', $nimPart);
@@ -3383,17 +3424,17 @@ class NilaiController extends Controller
         // Ambil detail mahasiswa
         $mahasiswa = Mahasiswa::with([
             'prodi',
-            'semester_masuk'
+            'semester_masuk',
         ])->find($idMahasiswa);
 
-        if (!$mahasiswa) {
+        if (! $mahasiswa) {
             throw new \Exception('Mahasiswa tidak ditemukan');
         }
 
         $user = $request->user();
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
-            if ($allowedProdiIds !== null && !in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
+            if ($allowedProdiIds !== null && ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
                 abort(403, 'Anda tidak memiliki akses ke data nilai mahasiswa ini.');
             }
         }
@@ -3405,8 +3446,8 @@ class NilaiController extends Controller
             'kelas.prodi',
             'kelas.semester',
         ])
-        ->where('id_mahasiswa', $idMahasiswa)
-        ->whereNull('krs.deleted_at');
+            ->where('id_mahasiswa', $idMahasiswa)
+            ->whereNull('krs.deleted_at');
 
         // Filter berdasarkan semester
         if ($semesterId) {
@@ -3419,7 +3460,7 @@ class NilaiController extends Controller
         if ($search) {
             $query->whereHas('kelas.kurikulumMatkul.matkul', function ($q) use ($search) {
                 $q->where('nama', 'like', "%{$search}%")
-                  ->orWhere('kode', 'like', "%{$search}%");
+                    ->orWhere('kode', 'like', "%{$search}%");
             });
         }
 
@@ -3437,7 +3478,7 @@ class NilaiController extends Controller
         // Ambil nilai untuk setiap KRS
         $krsIds = $krsList->pluck('id')->toArray();
         $nilaiMap = [];
-        if (!empty($krsIds)) {
+        if (! empty($krsIds)) {
             $nilaiList = Nilai::whereIn('id_krs', $krsIds)
                 ->whereNull('deleted_at')
                 ->get()
@@ -3468,7 +3509,7 @@ class NilaiController extends Controller
         foreach ($krsList as $krs) {
             $matkul = $krs->kelas->kurikulumMatkul->matkul ?? null;
             $nilai = isset($nilaiMap[$krs->id]) ? $nilaiMap[$krs->id] : null;
-            
+
             $sks = $matkul?->sks ?? 0;
             $totalSks += $sks;
 
@@ -3577,17 +3618,17 @@ class NilaiController extends Controller
     <table style="width: 100%; border: none !important;" border="0">
         <tr style="border: none !important;">
             <td style="vertical-align: middle; border: none !important;" width="100px">
-                <img src="' . htmlspecialchars($settingLogoPerguruanTinggi?->value ?? '') . '" alt="' . htmlspecialchars($namaPerguruanTinggi) . '" style="width: 100px; height: 100px;">
+                <img src="'.htmlspecialchars($settingLogoPerguruanTinggi?->value ?? '').'" alt="'.htmlspecialchars($namaPerguruanTinggi).'" style="width: 100px; height: 100px;">
             </td>
             <td style="text-align: center; vertical-align: middle; border: none !important;">
-                <p style="font-size: 12pt; font-weight: bold;">' . htmlspecialchars($yayasanPerguruanTinggi) . '</p>
-                <h1 style="font-size: 18pt; font-weight: bold; margin: 0;">' . htmlspecialchars($namaPerguruanTinggi) . '</h1>
+                <p style="font-size: 12pt; font-weight: bold;">'.htmlspecialchars($yayasanPerguruanTinggi).'</p>
+                <h1 style="font-size: 18pt; font-weight: bold; margin: 0;">'.htmlspecialchars($namaPerguruanTinggi).'</h1>
 
-                ' . htmlspecialchars($alamatPerguruanTinggi) . '<br>
+                '.htmlspecialchars($alamatPerguruanTinggi).'<br>
 
-                Email: ' . htmlspecialchars($emailPerguruanTinggi) . '<br>
+                Email: '.htmlspecialchars($emailPerguruanTinggi).'<br>
 
-                Website: ' . htmlspecialchars($websitePerguruanTinggi) . '<br>
+                Website: '.htmlspecialchars($websitePerguruanTinggi).'<br>
             </td>
         </tr>
     </table>
@@ -3596,35 +3637,35 @@ class NilaiController extends Controller
         <h2>LAPORAN NILAI MAHASISWA</h2>
         <div class="info-row">
             <div class="info-label">NIM:</div>
-            <div class="info-value">' . htmlspecialchars($mahasiswa->nim) . '</div>
+            <div class="info-value">'.htmlspecialchars($mahasiswa->nim).'</div>
         </div>
         <div class="info-row">
             <div class="info-label">Nama:</div>
-            <div class="info-value">' . htmlspecialchars($mahasiswa->nama) . '</div>
+            <div class="info-value">'.htmlspecialchars($mahasiswa->nama).'</div>
         </div>
         <div class="info-row">
             <div class="info-label">Program Studi:</div>
-            <div class="info-value">' . htmlspecialchars($mahasiswa->prodi?->nama ?? '-') . ' '. htmlspecialchars($mahasiswa->prodi?->jenjang?->kode ?? '-') .'</div>
+            <div class="info-value">'.htmlspecialchars($mahasiswa->prodi?->nama ?? '-').' '.htmlspecialchars($mahasiswa->prodi?->jenjang?->kode ?? '-').'</div>
         </div>
         <div class="info-row">
             <div class="info-label">Semester:</div>
-            <div class="info-value">' . htmlspecialchars($semesterFilter ? $semesterFilter->nama : 'Semua Semester') . '</div>
+            <div class="info-value">'.htmlspecialchars($semesterFilter ? $semesterFilter->nama : 'Semua Semester').'</div>
         </div>
         <div class="info-row">
             <div class="info-label">Semester ditempuh:</div>
-            <div class="info-value">' . ($semesterDitempuh !== null ? $semesterDitempuh : '-') . '</div>
+            <div class="info-value">'.($semesterDitempuh !== null ? $semesterDitempuh : '-').'</div>
         </div>
         <div class="info-row">
             <div class="info-label">Total SKS:</div>
-            <div class="info-value">' . $totalSks . '</div>
+            <div class="info-value">'.$totalSks.'</div>
         </div>
         <div class="info-row">
             <div class="info-label">Total Angka Mutu:</div>
-            <div class="info-value">' . $totalAngkaMutuFormatted . ' (' . $totalSksDenganNilai . ' SKS dengan nilai final)</div>
+            <div class="info-value">'.$totalAngkaMutuFormatted.' ('.$totalSksDenganNilai.' SKS dengan nilai final)</div>
         </div>
         <div class="info-row">
             <div class="info-label">IPK:</div>
-            <div class="info-value">' . $ipk . '</div>
+            <div class="info-value">'.$ipk.'</div>
         </div>
     </div>
 
@@ -3659,14 +3700,14 @@ class NilaiController extends Controller
             }
 
             $html .= '<tr>
-                <td class="text-center">' . $no . '</td>
-                <td>' . htmlspecialchars($matkul?->kode ?? '-') . '</td>
-                <td>' . htmlspecialchars($matkul?->nama ?? '-') . '</td>
-                <td class="text-center">' . ($matkul?->sks ?? '-') . '</td>
-                <td>' . htmlspecialchars($semester?->nama ?? '-') . '</td>
-                <td class="text-center">' . $hurufMutu . '</td>
-                <td class="text-center">' . $angkaMutu . '</td>
-                <td class="text-center">' . htmlspecialchars($statusNilai) . '</td>
+                <td class="text-center">'.$no.'</td>
+                <td>'.htmlspecialchars($matkul?->kode ?? '-').'</td>
+                <td>'.htmlspecialchars($matkul?->nama ?? '-').'</td>
+                <td class="text-center">'.($matkul?->sks ?? '-').'</td>
+                <td>'.htmlspecialchars($semester?->nama ?? '-').'</td>
+                <td class="text-center">'.$hurufMutu.'</td>
+                <td class="text-center">'.$angkaMutu.'</td>
+                <td class="text-center">'.htmlspecialchars($statusNilai).'</td>
             </tr>';
 
             $no++;
@@ -3682,13 +3723,13 @@ class NilaiController extends Controller
     </table>
 
     <div class="footer">
-        <p>Dicetak pada: ' . date('d/m/Y H:i:s') . '</p>
+        <p>Dicetak pada: '.date('d/m/Y H:i:s').'</p>
     </div>
 </body>
 </html>';
 
         // Setup dompdf
-        $options = new Options();
+        $options = new Options;
         $options->set('isRemoteEnabled', true);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('defaultFont', 'Arial');
@@ -3698,7 +3739,7 @@ class NilaiController extends Controller
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
-        $filename = 'nilai_' . str_replace(' ', '_', $mahasiswa->nim) . '_' . date('YmdHis') . '.pdf';
+        $filename = 'nilai_'.str_replace(' ', '_', $mahasiswa->nim).'_'.date('YmdHis').'.pdf';
 
         return response()->streamDownload(function () use ($dompdf) {
             echo $dompdf->output();

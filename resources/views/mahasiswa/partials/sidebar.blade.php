@@ -5,6 +5,9 @@
     // lengkap sejak awal — cukup ganti target rute saat modulnya dibangun.
     $mahasiswaNavItems = [
         ['route' => 'mahasiswa.dashboard', 'label' => 'Dashboard', 'icon' => 'layout-dashboard'],
+        // Kalender Akademik: modul baru, tidak ada di siak-frontend — sengaja tidak mengikuti
+        // urutan MahasiswaSidebar.tsx di atas.
+        ['route' => 'mahasiswa.kalender-akademik', 'label' => 'Kalender Akademik', 'icon' => 'calendar-days'],
         ['label' => 'Perkuliahan', 'icon' => 'calendar', 'children' => [
             ['route' => 'mahasiswa.jadwal', 'label' => 'Jadwal'],
             ['route' => 'mahasiswa.kehadiran', 'label' => 'Kehadiran'],

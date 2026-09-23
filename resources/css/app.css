@@ -77,7 +77,9 @@ body {
     align-items: center;
     width: 100%;
     min-height: 2.625rem;
-    padding: 0.375rem 0.75rem;
+    /* Kanan dilebihkan supaya teks/label tidak tertutup ikon caret yang ditumpuk di atasnya
+       (lihat resources/views/components/searchable-select.blade.php). */
+    padding: 0.375rem 1.75rem 0.375rem 0.75rem;
     background-color: #fff;
     border: none;
     border-radius: 0.5rem;

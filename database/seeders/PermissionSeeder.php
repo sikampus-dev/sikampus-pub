@@ -28,6 +28,7 @@ class PermissionSeeder extends Seeder
             'manage jadwal ujian',
             'manage krs',
             'manage perkuliahan',
+            'manage kalender akademik',
             'manage nilai',
             'manage rentang nilai',
             'manage konversi nilai',

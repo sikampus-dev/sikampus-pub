@@ -62,6 +62,8 @@ use App\Livewire\Admin\JenisPenilaian\Form as JenisPenilaianForm;
 use App\Livewire\Admin\JenisPenilaian\Index as JenisPenilaianIndex;
 use App\Livewire\Admin\Jenjang\Form as JenjangForm;
 use App\Livewire\Admin\Jenjang\Index as JenjangIndex;
+use App\Livewire\Admin\KalenderAkademik\Form as KalenderAkademikForm;
+use App\Livewire\Admin\KalenderAkademik\Index as KalenderAkademikIndex;
 use App\Livewire\Admin\KategoriBiaya\Form as KategoriBiayaForm;
 use App\Livewire\Admin\KategoriBiaya\Index as KategoriBiayaIndex;
 use App\Livewire\Admin\KategoriBiaya\Show as KategoriBiayaShow;
@@ -176,6 +178,7 @@ use App\Livewire\Dosen\Dashboard as DosenDashboard;
 use App\Livewire\Dosen\Jadwal\Detail as DosenJadwalDetail;
 use App\Livewire\Dosen\Jadwal\Index as DosenJadwalIndex;
 use App\Livewire\Dosen\Jadwal\Show as DosenJadwalShow;
+use App\Livewire\Dosen\KalenderAkademik\Index as DosenKalenderAkademikIndex;
 use App\Livewire\Dosen\Kehadiran\Detail as DosenKehadiranDetail;
 use App\Livewire\Dosen\Kehadiran\Index as DosenKehadiranIndex;
 use App\Livewire\Dosen\Kehadiran\RekapKelas as DosenKehadiranRekapKelas;
@@ -200,6 +203,7 @@ use App\Livewire\Mahasiswa\Biodata\Index as MahasiswaBiodataIndex;
 use App\Livewire\Mahasiswa\Dashboard as MahasiswaDashboard;
 use App\Livewire\Mahasiswa\Jadwal\Detail as MahasiswaJadwalDetail;
 use App\Livewire\Mahasiswa\Jadwal\Index as MahasiswaJadwalIndex;
+use App\Livewire\Mahasiswa\KalenderAkademik\Index as MahasiswaKalenderAkademikIndex;
 use App\Livewire\Mahasiswa\Kehadiran\Index as MahasiswaKehadiranIndex;
 use App\Livewire\Mahasiswa\KeringananBiaya\Index as MahasiswaKeringananBiayaIndex;
 use App\Livewire\Mahasiswa\Krs\Index as MahasiswaKrsIndex;
@@ -288,6 +292,8 @@ Route::middleware(['auth', 'role.dosen.web'])->group(function (): void {
     Route::livewire('/dosen/dashboard', DosenDashboard::class)->name('dosen.dashboard');
     Route::livewire('/dosen/profil', DosenProfil::class)->name('dosen.profil');
 
+    Route::livewire('/dosen/kalender-akademik', DosenKalenderAkademikIndex::class)->name('dosen.kalender-akademik');
+
     Route::livewire('/dosen/kelas', DosenKelasIndex::class)->name('dosen.kelas');
 
     // Rute literal ('/dosen/jadwal', '{kelasId}/jurnal-perkuliahan-pdf') harus di atas rute
@@ -366,6 +372,8 @@ Route::middleware(['auth', 'role.admin.prodi.web'])->group(function (): void {
 Route::middleware(['auth', 'role.mahasiswa.web'])->group(function (): void {
     Route::livewire('/mahasiswa/dashboard', MahasiswaDashboard::class)->name('mahasiswa.dashboard');
     Route::livewire('/mahasiswa/profil', MahasiswaProfil::class)->name('mahasiswa.profil');
+
+    Route::livewire('/mahasiswa/kalender-akademik', MahasiswaKalenderAkademikIndex::class)->name('mahasiswa.kalender-akademik');
 
     // Menu "Akun" di sidebar: Profil (akun & password) + Biodata (data diri lengkap).
     // Rute literal ('/mahasiswa/biodata/edit') harus di atas rute yang lebih pendek.
@@ -501,6 +509,10 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::livewire('akademik/perkuliahan/import', PerkuliahanImport::class)->name('akademik.perkuliahan.import');
         Route::livewire('akademik/perkuliahan/nilai/{id}', PerkuliahanNilai::class)->name('akademik.perkuliahan.nilai');
         Route::livewire('akademik/perkuliahan/{id}', PerkuliahanShow::class)->name('akademik.perkuliahan.show');
+
+        Route::livewire('akademik/kalender-akademik', KalenderAkademikIndex::class)->name('akademik.kalender-akademik');
+        Route::livewire('akademik/kalender-akademik/create', KalenderAkademikForm::class)->name('akademik.kalender-akademik.create');
+        Route::livewire('akademik/kalender-akademik/{id}/edit', KalenderAkademikForm::class)->name('akademik.kalender-akademik.edit');
 
         // Rute literal (template/import) harus didaftarkan sebelum 'akademik/tugas-akhir/{id}'
         // supaya tidak tertangkap sebagai id (lihat catatan di skill siak-livewire-module).

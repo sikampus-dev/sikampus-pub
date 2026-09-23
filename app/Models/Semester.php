@@ -20,6 +20,7 @@ class Semester extends Model
         'kelasAngkatan' => 'kelas (sebagai angkatan)',
         'tagihan' => 'tagihan',
         'mahasiswaMasuk' => 'mahasiswa (semester masuk)',
+        'kalenderAkademik' => 'kalender akademik',
     ];
 
     protected $table = 'semester';
@@ -58,5 +59,10 @@ class Semester extends Model
     public function mahasiswaMasuk()
     {
         return $this->hasMany(Mahasiswa::class, 'id_semester_masuk');
+    }
+
+    public function kalenderAkademik()
+    {
+        return $this->hasMany(KalenderAkademik::class, 'id_semester');
     }
 }

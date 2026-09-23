@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Dosen;
+use App\Models\DosenWali;
 use App\Models\Jadwal;
 use App\Models\Kehadiran;
 use App\Models\Kelas;
@@ -14,11 +16,14 @@ use App\Models\Nilai;
 use App\Models\Notifikasi;
 use App\Models\Perkuliahan;
 use App\Models\Semester;
+use App\Services\KalenderAkademikGateService;
 use App\Services\KeuanganAksesMahasiswaService;
 use App\Services\PendaftaranKrs;
 use App\Services\UrutanMatkulService;
+use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -26,6 +31,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -43,7 +50,7 @@ class KrsController extends Controller
         mixed $semesterMasukId,
         mixed $grupMahasiswaId,
         ?array $allowedProdiIds
-    ): \Illuminate\Database\Eloquent\Builder {
+    ): Builder {
         $q = Mahasiswa::query()
             ->select([
                 'mahasiswa.id as id_mahasiswa',
@@ -93,7 +100,7 @@ class KrsController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, object>  $results
+     * @param  Collection<int, object>  $results
      * @return array<int, array<string, mixed>>
      */
     private function mapKrsIndexRows(Collection $results, array $dosenWaliData, array $jenjangData): array
@@ -670,7 +677,7 @@ class KrsController extends Controller
         $perPage = (int) $request->get('per_page', 100);
         $search = $request->get('search');
 
-        $query = \App\Models\Mahasiswa::with(['prodi', 'semester_masuk', 'kelompok_kelas']);
+        $query = Mahasiswa::with(['prodi', 'semester_masuk', 'kelompok_kelas']);
 
         $user = $request->user();
         if ($user && $user->hasScopeRestriction()) {
@@ -694,7 +701,7 @@ class KrsController extends Controller
 
     public function getMahasiswaDetail(Request $request, $id): JsonResponse
     {
-        $mahasiswa = \App\Models\Mahasiswa::with([
+        $mahasiswa = Mahasiswa::with([
             'prodi',
             'semester_masuk',
             'kelompok_kelas',
@@ -750,7 +757,7 @@ class KrsController extends Controller
         $prodiId = $request->get('id_prodi');
         $semesterId = $request->get('id_semester');
 
-        $query = \App\Models\Kelas::with([
+        $query = Kelas::with([
             'kurikulumMatkul.matkul',
             'kurikulumMatkul.kurikulum',
             'prodi',
@@ -794,7 +801,7 @@ class KrsController extends Controller
     public function show(Request $request, $idMahasiswa): JsonResponse
     {
         // Ambil detail mahasiswa
-        $mahasiswa = \App\Models\Mahasiswa::with([
+        $mahasiswa = Mahasiswa::with([
             'prodi',
             'semester_masuk',
         ])->find($idMahasiswa);
@@ -1046,7 +1053,7 @@ class KrsController extends Controller
     public function getKrsBySemesterForBimbinganWali(Request $request, int $idMahasiswa): JsonResponse
     {
         $user = $request->user();
-        $dosen = \App\Models\Dosen::where('id_user', $user->id)->first();
+        $dosen = Dosen::where('id_user', $user->id)->first();
 
         if (! $dosen) {
             return response()->json([
@@ -1054,7 +1061,7 @@ class KrsController extends Controller
             ], 404);
         }
 
-        $dosenWali = \App\Models\DosenWali::where('id_dosen', $dosen->id)
+        $dosenWali = DosenWali::where('id_dosen', $dosen->id)
             ->where('id_mahasiswa', $idMahasiswa)
             ->where('status', 'active')
             ->whereNull('deleted_at')
@@ -1086,7 +1093,7 @@ class KrsController extends Controller
             abort(403, 'Anda tidak memiliki akses.');
         }
 
-        $mahasiswa = \App\Models\Mahasiswa::with(['prodi', 'semester_masuk'])->find($idMahasiswa);
+        $mahasiswa = Mahasiswa::with(['prodi', 'semester_masuk'])->find($idMahasiswa);
         if (! $mahasiswa || ! in_array((int) $mahasiswa->id_prodi, $allowedProdiIds, true)) {
             return response()->json(['message' => 'Mahasiswa tidak ditemukan'], 404);
         }
@@ -1381,10 +1388,10 @@ class KrsController extends Controller
         $headerStyle = [
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => [
-                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'fillType' => Fill::FILL_SOLID,
                 'startColor' => ['rgb' => '4472C4'],
             ],
-            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
         $sheet->getStyle('A1:D1')->applyFromArray($headerStyle);
 
@@ -2366,6 +2373,16 @@ class KrsController extends Controller
             ], 422);
         }
 
+        // Sama persis dengan App\Livewire\Mahasiswa\Krs\Pengajuan::submit — lihat
+        // App\Services\KalenderAkademikGateService untuk perilaku fail-open kalau belum ada
+        // event kalender untuk semester ini.
+        $periodeKrs = KalenderAkademikGateService::isPeriodeAktif('krs', $activeSemester?->id);
+        if (! $periodeKrs['allowed']) {
+            return response()->json([
+                'message' => $periodeKrs['alasan'] ?? 'Pengajuan KRS sedang tidak dibuka.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'krs' => ['required', 'array', 'min:1'],
             'krs.*.id_kelas' => ['required', 'integer', 'exists:kelas,id'],
@@ -2490,7 +2507,7 @@ class KrsController extends Controller
             DB::commit();
 
             if ($jumlahPengajuanBaru > 0) {
-                $dosenWaliAktif = \App\Models\DosenWali::where('id_mahasiswa', $mahasiswa->id)
+                $dosenWaliAktif = DosenWali::where('id_mahasiswa', $mahasiswa->id)
                     ->where('status', 'active')
                     ->whereNull('deleted_at')
                     ->with('dosen')
@@ -2597,7 +2614,7 @@ class KrsController extends Controller
     public function getMahasiswaBimbingan(Request $request): JsonResponse
     {
         $user = $request->user();
-        $dosen = \App\Models\Dosen::where('id_user', $user->id)->first();
+        $dosen = Dosen::where('id_user', $user->id)->first();
 
         if (! $dosen) {
             return response()->json([
@@ -2619,7 +2636,7 @@ class KrsController extends Controller
         }
 
         // Query mahasiswa bimbingan dosen
-        $query = \App\Models\DosenWali::with([
+        $query = DosenWali::with([
             'mahasiswa.prodi',
             'mahasiswa.prodi.jenjang',
             'mahasiswa.semester_masuk',
@@ -2726,7 +2743,7 @@ class KrsController extends Controller
     public function getKrsPending(Request $request, int $idMahasiswa): JsonResponse
     {
         $user = $request->user();
-        $dosen = \App\Models\Dosen::where('id_user', $user->id)->first();
+        $dosen = Dosen::where('id_user', $user->id)->first();
 
         if (! $dosen) {
             return response()->json([
@@ -2735,7 +2752,7 @@ class KrsController extends Controller
         }
 
         // Verifikasi bahwa mahasiswa adalah bimbingan dosen ini
-        $dosenWali = \App\Models\DosenWali::where('id_dosen', $dosen->id)
+        $dosenWali = DosenWali::where('id_dosen', $dosen->id)
             ->where('id_mahasiswa', $idMahasiswa)
             ->where('status', 'active')
             ->whereNull('deleted_at')
@@ -2852,7 +2869,7 @@ class KrsController extends Controller
         ]);
 
         $user = $request->user();
-        $dosen = \App\Models\Dosen::where('id_user', $user->id)->first();
+        $dosen = Dosen::where('id_user', $user->id)->first();
 
         if (! $dosen) {
             return response()->json([
@@ -2871,7 +2888,7 @@ class KrsController extends Controller
                 ->get();
 
             foreach ($krsList as $krs) {
-                $dosenWali = \App\Models\DosenWali::where('id_dosen', $dosen->id)
+                $dosenWali = DosenWali::where('id_dosen', $dosen->id)
                     ->where('id_mahasiswa', $krs->id_mahasiswa)
                     ->where('status', 'active')
                     ->whereNull('deleted_at')
@@ -2974,7 +2991,7 @@ class KrsController extends Controller
                 return 0;
             }
 
-            return \Carbon\Carbon::parse($p->waktu_mulai)->getTimestamp();
+            return Carbon::parse($p->waktu_mulai)->getTimestamp();
         };
 
         $ongoing = $candidates

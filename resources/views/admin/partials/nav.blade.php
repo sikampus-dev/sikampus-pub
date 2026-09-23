@@ -3,6 +3,7 @@
         [
             'label' => 'Akademik',
             'items' => [
+                ['route' => 'admin.akademik.kalender-akademik', 'label' => 'Kalender Akademik'],
                 ['label' => 'Kurikulum', 'children' => [
                     ['route' => 'admin.akademik.kurikulum', 'label' => 'Kurikulum'],
                     ['route' => 'admin.akademik.matkul', 'label' => 'Mata Kuliah'],

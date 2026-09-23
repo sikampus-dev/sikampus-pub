@@ -11,6 +11,7 @@ use App\Models\MatkulPrasyarat;
 use App\Models\Nilai;
 use App\Models\Notifikasi;
 use App\Models\Semester;
+use App\Services\KalenderAkademikGateService;
 use App\Services\KeuanganAksesMahasiswaService;
 use App\Services\PendaftaranKrs;
 use Illuminate\Support\Facades\Auth;
@@ -134,10 +135,23 @@ class Pengajuan extends Component
         return KeuanganAksesMahasiswaService::canAccessByKode($this->mahasiswaId, 'krs', $this->activeSemester?->id);
     }
 
+    /**
+     * Gerbang periode dari kalender akademik (kategori 'krs') — lihat
+     * App\Services\KalenderAkademikGateService. Panel admin TIDAK melalui gerbang ini; hanya
+     * jalur self-service mahasiswa ini dan KrsController::submitPengajuanKrs (API).
+     */
+    #[Computed]
+    public function periodeKrsCheck(): array
+    {
+        return KalenderAkademikGateService::isPeriodeAktif('krs', $this->activeSemester?->id);
+    }
+
     #[Computed]
     public function canSubmitNewKrs(): bool
     {
-        return $this->financeCheck['allowed'] || $this->financeCheck['persentase_minimum_required'] === null;
+        $financeOk = $this->financeCheck['allowed'] || $this->financeCheck['persentase_minimum_required'] === null;
+
+        return $financeOk && $this->periodeKrsCheck['allowed'];
     }
 
     #[Computed]
@@ -163,6 +177,10 @@ class Pengajuan extends Component
             return;
         }
         if (! $this->financeCheck['allowed'] && $this->financeCheck['persentase_minimum_required'] !== null) {
+            return;
+        }
+
+        if (! $this->periodeKrsCheck['allowed']) {
             return;
         }
 
@@ -251,6 +269,12 @@ class Pengajuan extends Component
 
         if (! $this->financeCheck['allowed'] && $this->financeCheck['persentase_minimum_required'] !== null) {
             $this->addError('selectedKelas', 'Pengajuan KRS belum dapat dilakukan karena persyaratan administratif keuangan belum terpenuhi.');
+
+            return;
+        }
+
+        if (! $this->periodeKrsCheck['allowed']) {
+            $this->addError('selectedKelas', $this->periodeKrsCheck['alasan'] ?? 'Pengajuan KRS sedang tidak dibuka.');
 
             return;
         }

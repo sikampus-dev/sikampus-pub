@@ -7,6 +7,7 @@ use App\Models\JadwalDosen;
 use App\Models\Kelas;
 use App\Models\KelasDosen;
 use App\Models\Semester;
+use App\Services\KalenderAkademikGateService;
 use App\Services\NilaiKelasDataService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +89,17 @@ class Input extends Component
         return NilaiKelasDataService::build($this->kelas);
     }
 
+    /**
+     * Gerbang periode dari kalender akademik (kategori 'nilai') — lihat
+     * App\Services\KalenderAkademikGateService. Panel admin TIDAK melalui gerbang ini; hanya
+     * jalur self-service dosen ini dan NilaiController::storeNilaiKomponen (API).
+     */
+    #[Computed]
+    public function periodeNilaiCheck(): array
+    {
+        return KalenderAkademikGateService::isPeriodeAktif('nilai', $this->kelas->id_semester);
+    }
+
     public function updatedSelectedJenisPenilaianId(): void
     {
         $this->fillNilaiInputs();
@@ -111,6 +123,12 @@ class Input extends Component
      */
     public function save(): void
     {
+        if (! $this->periodeNilaiCheck['allowed']) {
+            $this->addError('periode', $this->periodeNilaiCheck['alasan'] ?? 'Pengisian nilai sedang tidak dibuka.');
+
+            return;
+        }
+
         if ($this->selectedJenisPenilaianId === '') {
             $this->addError('selectedJenisPenilaianId', 'Pilih jenis penilaian terlebih dahulu.');
 

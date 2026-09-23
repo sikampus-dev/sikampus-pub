@@ -3,6 +3,7 @@
 
 @php
     $finance = $this->financeCheck;
+    $periode = $this->periodeKrsCheck;
     $data = $this->filteredData;
     $formatIdr = fn (float $v) => 'Rp'.number_format($v, 0, ',', '.');
 @endphp
@@ -72,6 +73,18 @@
             </div>
         </div>
     @endif
+
+    @unless ($periode['allowed'])
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <div class="flex gap-3">
+                <i data-lucide="calendar-off" class="h-8 w-8 shrink-0 text-amber-600" aria-hidden="true"></i>
+                <div class="min-w-0 space-y-1">
+                    <h3 class="text-base font-semibold text-amber-900">Pengajuan KRS sedang tidak dibuka</h3>
+                    <p class="text-sm text-amber-950/90">{{ $periode['alasan'] ?? 'Periode pengisian KRS sedang tidak aktif.' }}</p>
+                </div>
+            </div>
+        </div>
+    @endunless
 
     <div class="rounded-2xl bg-white p-6 shadow-border">
         <div class="flex items-center justify-between">
