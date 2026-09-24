@@ -14,6 +14,36 @@ it('renders index and create form as full pages', function () {
     $this->actingAs($admin)->get(route('admin.akademik.kalender-akademik.create'))->assertOk()->assertSee('Tambah Event Kalender Akademik');
 });
 
+it('pre-fills id_semester with the active semester when opening the create form', function () {
+    $admin = adminUser();
+    $aktif = Semester::factory()->active()->create();
+    Semester::factory()->create(); // semester lain, tidak aktif -> tidak boleh terpilih
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->assertSet('id_semester', (string) $aktif->id);
+});
+
+it('leaves id_semester empty on the create form when there is no active semester', function () {
+    $admin = adminUser();
+    Semester::factory()->create(['is_active' => false]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->assertSet('id_semester', '');
+});
+
+it('does not override id_semester with the active semester when opening the edit form', function () {
+    $admin = adminUser();
+    Semester::factory()->active()->create();
+    $semesterLampau = Semester::factory()->create();
+    $event = KalenderAkademik::factory()->create(['id_semester' => $semesterLampau->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['id' => $event->id])
+        ->assertSet('id_semester', (string) $semesterLampau->id);
+});
+
 it('creates, updates, and deletes a kalender akademik event', function () {
     $admin = adminUser();
     $semester = Semester::factory()->create();

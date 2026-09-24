@@ -32,6 +32,11 @@ class Form extends Component
         $this->resolveBackUrl();
 
         if ($id === null) {
+            // Form tambah: pra-isi ke semester aktif — mayoritas event (KRS/Nilai) memang dibuat
+            // untuk semester yang sedang berjalan. Admin tetap bisa mengganti atau mengosongkannya
+            // (mis. untuk event global seperti libur nasional).
+            $this->id_semester = (string) (Semester::where('is_active', true)->value('id') ?? '');
+
             return;
         }
 
