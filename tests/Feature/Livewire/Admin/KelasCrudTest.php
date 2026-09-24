@@ -303,6 +303,23 @@ it('lets an existing kelas generate jadwal on edit, but rejects it when a slot i
     expect(Jadwal::where('id_kelas', $kelas->id)->whereNull('id_ruangan')->count())->toBe(2);
 });
 
+it('shows the matkul sks below its name in the mata kuliah column', function () {
+    $admin = adminUser();
+    $matkul = Matkul::factory()->create(['nama' => 'Kalkulus Lanjut', 'kode' => 'MK-100', 'sks' => 4]);
+    $kelas = Kelas::factory()->create();
+    $kelas->kurikulumMatkul()->update(['id_matkul' => $matkul->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->assertSeeInOrder(['Kalkulus Lanjut', 'SKS: 4']);
+});
+
+it('shows a loading indicator scoped to the search/filter/toggle fields on the index page', function () {
+    Livewire::actingAs(adminUser())
+        ->test(Index::class)
+        ->assertSee('wire:target="search, filterProdi, filterSemester, filterKelompokKelas, filterAngkatan, showTrashed"', escape: false);
+});
+
 it('shows the jumlah pertemuan column counting actual jadwal rows, not the jml_pertemuan target field', function () {
     $admin = adminUser();
     // jml_pertemuan (target rencana) sengaja dibuat BEDA dari jumlah Jadwal sungguhan — kolom
