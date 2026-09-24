@@ -155,3 +155,27 @@ it('rejects opening or editing a bimbingan note that belongs to a different dose
         ->call('openBimbinganModal', $catatanOrangLain->id)
         ->assertStatus(404);
 });
+
+it('orders krs semester groups by kode, newest first, even when an older semester was created later', function () {
+    $dosenUser = dosenUser();
+    $dosen = Dosen::where('id_user', $dosenUser->id)->firstOrFail();
+    $mahasiswa = Mahasiswa::factory()->create();
+    DosenWali::create(['id_dosen' => $dosen->id, 'id_mahasiswa' => $mahasiswa->id, 'status' => 'active']);
+
+    // Semester paling lama sengaja dibuat terakhir supaya id-nya paling besar — sort per id akan
+    // menaruhnya di puncak, sort per kode harus menempatkannya di dasar.
+    $baru = Semester::factory()->create(['kode' => '20252']);
+    $tengah = Semester::factory()->create(['kode' => '20241']);
+    $lama = Semester::factory()->create(['kode' => '20232']);
+    expect($lama->id)->toBeGreaterThan($baru->id);
+
+    foreach ([$lama, $tengah, $baru] as $semester) {
+        $kelas = Kelas::factory()->create(['id_semester' => $semester->id]);
+        Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelas->id]);
+    }
+
+    $groups = Livewire::actingAs($dosenUser)->test(Show::class, ['idMahasiswa' => $mahasiswa->id])->instance()->krsBySemester();
+
+    expect(array_column(array_map(fn ($g) => ['kode' => $g['semester']->kode], $groups), 'kode'))
+        ->toBe(['20252', '20241', '20232']);
+});

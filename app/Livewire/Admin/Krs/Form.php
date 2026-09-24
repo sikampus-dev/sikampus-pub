@@ -30,6 +30,14 @@ class Form extends Component
     /** Mode edit: id mahasiswa pemilik baris KRS, untuk URL detail. */
     public ?int $editMahasiswaId = null;
 
+    /**
+     * Mode edit: filter semester yang sedang aktif di halaman detail KRS SAAT tombol Ubah diklik
+     * (lihat query string id_semester_detail dikirim krs/show.blade.php) — bukan filter Index.
+     * Diteruskan lagi lewat urlDetail() supaya begitu Batal/simpan mengembalikan admin ke halaman
+     * detail, filter semester yang sama otomatis terpilih lagi, bukan balik ke "Semua Semester".
+     */
+    public string $filterSemesterDetail = '';
+
     public string $submitError = '';
 
     // ---- Mode create: cari-lalu-pilih mahasiswa (bisa ribuan baris, tidak realistis preload
@@ -107,6 +115,7 @@ class Form extends Component
         $matkul = $krs->kelas->kurikulumMatkul->matkul ?? null;
 
         $this->editMahasiswaId = (int) $krs->id_mahasiswa;
+        $this->filterSemesterDetail = (string) request()->query('id_semester_detail', '');
         $this->cancelUrl = $this->urlDetail();
 
         $this->editMahasiswaProdiId = $mahasiswa->id_prodi ?? null;
@@ -434,7 +443,13 @@ class Form extends Component
     /** URL detail KRS mahasiswa (mode edit), membawa state Index supaya Kembali di sana tetap benar. */
     private function urlDetail(): string
     {
-        return $this->urlDenganState(route('admin.akademik.krs.show', $this->editMahasiswaId));
+        $url = $this->urlDenganState(route('admin.akademik.krs.show', $this->editMahasiswaId));
+
+        if ($this->filterSemesterDetail !== '') {
+            $url .= (str_contains($url, '?') ? '&' : '?').'id_semester_detail='.urlencode($this->filterSemesterDetail);
+        }
+
+        return $url;
     }
 
     public function render()

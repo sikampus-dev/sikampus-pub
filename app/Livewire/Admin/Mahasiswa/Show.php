@@ -107,7 +107,8 @@ class Show extends Component
                     'total_sks_diacc' => $items->filter(fn (Krs $krs) => $krs->approved_at)->sum($sksOf),
                 ];
             })
-            ->sortByDesc(fn ($group) => $group['semester']->id)
+            // Kode, bukan id — lihat KrsController::buildKrsBySemesterPayload.
+            ->sortByDesc(fn ($group) => $group['semester']->kode)
             ->values();
     }
 

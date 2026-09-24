@@ -116,3 +116,61 @@ it('tidak meneruskan parameter asing dari query string', function () {
         ->test(Show::class, ['id' => $mahasiswa->id])
         ->assertSet('backUrl', route('admin.akademik.krs').'?page=2');
 });
+
+/**
+ * Filter semester di halaman detail KRS (App\Livewire\Admin\Krs\Show::filterSemester) BEDA dari
+ * filter Index yang dibawa lewat $returnQuery di atas — ini filter mahasiswa satuan itu sendiri,
+ * dikirim lewat query id_semester_detail (bukan id_semester, supaya tidak tertukar dengan filter
+ * Index yang kebetulan memakai nama query yang sama).
+ */
+it('meneruskan filter semester halaman detail ke link ubah', function () {
+    $admin = adminUser();
+    ['mahasiswa' => $mahasiswa, 'krs' => $krs, 'kelas' => $kelas] = krsMahasiswa();
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->set('filterSemester', (string) $kelas->id_semester)
+        ->assertSee(route('admin.akademik.krs.edit', $krs->id).'?id_semester_detail='.$kelas->id_semester, false);
+});
+
+it('memulihkan filter semester halaman detail dari query string id_semester_detail', function () {
+    $admin = adminUser();
+    ['mahasiswa' => $mahasiswa] = krsMahasiswa();
+
+    Livewire::withQueryParams(['id_semester_detail' => '42'])
+        ->actingAs($admin)
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->assertSet('filterSemester', '42');
+});
+
+it('membawa filter semester halaman detail ke cancelUrl form ubah', function () {
+    $admin = adminUser();
+    ['mahasiswa' => $mahasiswa, 'krs' => $krs] = krsMahasiswa();
+
+    Livewire::withQueryParams(['id_semester_detail' => '42'])
+        ->actingAs($admin)
+        ->test(Form::class, ['id' => $krs->id])
+        ->assertSet('cancelUrl', route('admin.akademik.krs.show', $mahasiswa->id).'?id_semester_detail=42');
+});
+
+it('mengembalikan filter semester halaman detail setelah simpan di form ubah', function () {
+    $admin = adminUser();
+    ['mahasiswa' => $mahasiswa, 'krs' => $krs] = krsMahasiswa();
+
+    Livewire::withQueryParams(['id_semester_detail' => '42'])
+        ->actingAs($admin)
+        ->test(Form::class, ['id' => $krs->id])
+        ->call('save')
+        ->assertRedirect(route('admin.akademik.krs.show', $mahasiswa->id).'?id_semester_detail=42');
+});
+
+it('menggabungkan filter Index dan filter semester halaman detail sekaligus tanpa saling menimpa', function () {
+    $admin = adminUser();
+    ['mahasiswa' => $mahasiswa, 'krs' => $krs] = krsMahasiswa();
+
+    Livewire::withQueryParams(['page' => 3, 'id_semester_detail' => '42'])
+        ->actingAs($admin)
+        ->test(Form::class, ['id' => $krs->id])
+        ->call('save')
+        ->assertRedirect(route('admin.akademik.krs.show', $mahasiswa->id).'?page=3&id_semester_detail=42');
+});

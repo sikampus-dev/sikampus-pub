@@ -162,7 +162,10 @@ class Index extends Component
             ];
         }
 
-        usort($bySemester, fn ($a, $b) => $b['semester']['id'] <=> $a['semester']['id']);
+        // Terbaru dulu berdasarkan kode semester, BUKAN id — id cuma urutan pembuatan baris,
+        // sehingga semester lama yang diinput belakangan ikut naik ke atas. Sama seperti
+        // KrsController::getKrsBySemester.
+        usort($bySemester, fn ($a, $b) => $b['semester']['kode'] <=> $a['semester']['kode']);
 
         return array_values($bySemester);
     }

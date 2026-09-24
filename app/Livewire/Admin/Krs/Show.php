@@ -74,6 +74,12 @@ class Show extends Component
         $this->mahasiswaId = $id;
         $this->resolveBackUrl();
 
+        // Beda dari id_semester yang dibawa resolveBackUrl() (filter Index, untuk tombol Kembali):
+        // ini filter semester milik halaman detail ini sendiri, dikirim balik lewat query string
+        // id_semester_detail oleh Krs\Form (lihat urlDetail() di sana) setelah admin mengubah KRS,
+        // supaya filter yang sedang aktif di sini tidak hilang begitu redirect kembali.
+        $this->filterSemester = (string) request()->query('id_semester_detail', '');
+
         $mahasiswa = Mahasiswa::findOrFail($id);
 
         $user = Auth::user();

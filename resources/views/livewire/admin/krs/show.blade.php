@@ -210,6 +210,16 @@
                         @php
                             $matkul = $krs->kelas->kurikulumMatkul->matkul ?? null;
                             $isApproved = $krs->approved_at !== null;
+
+                            // filterSemester di sini adalah filter halaman detail ini sendiri
+                            // (BEDA dari $returnQuery, yang membawa filter Index) — diteruskan lewat
+                            // id_semester_detail supaya Krs\Form bisa mengembalikannya lagi setelah
+                            // simpan/batal (lihat Krs\Form::urlDetail() dan Krs\Show::mount()).
+                            $ubahQuery = array_filter([
+                                $returnQuery !== '' ? $returnQuery : null,
+                                $filterSemester !== '' ? 'id_semester_detail='.urlencode($filterSemester) : null,
+                            ]);
+                            $ubahUrl = route('admin.akademik.krs.edit', $krs->id).($ubahQuery !== [] ? '?'.implode('&', $ubahQuery) : '');
                         @endphp
                         <tr wire:key="krs-{{ $krs->id }}" class="{{ $krs->trashed() ? 'bg-neutral-50 text-neutral-500' : '' }}">
                             <td class="print:hidden px-4 py-3">
@@ -286,7 +296,7 @@
                                         </button>
                                     @else
                                         <a
-                                            href="{{ route('admin.akademik.krs.edit', $krs->id) }}{{ $returnQuery ? '?'.$returnQuery : '' }}"
+                                            href="{{ $ubahUrl }}"
                                             class="inline-flex items-center justify-center rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                                             title="Ubah"
                                         >

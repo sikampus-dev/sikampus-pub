@@ -164,3 +164,29 @@ it('has no add, edit, or delete actions (read-only portal)', function () {
 it('redirects unauthenticated users to the login page', function () {
     $this->get(route('prodi.krs'))->assertRedirect(route('login'));
 });
+
+it('orders the detail modal semester groups by kode, newest first', function () {
+    $prodi = Prodi::factory()->create();
+    $mhs = Mahasiswa::factory()->create(['id_prodi' => $prodi->id]);
+
+    // Semester paling lama dibuat terakhir supaya id-nya paling besar; sort per id akan salah.
+    $baru = Semester::factory()->create(['kode' => '20252']);
+    $tengah = Semester::factory()->create(['kode' => '20241']);
+    $lama = Semester::factory()->create(['kode' => '20232']);
+    expect($lama->id)->toBeGreaterThan($baru->id);
+
+    foreach ([$lama, $tengah, $baru] as $semester) {
+        $matkul = Matkul::factory()->create(['id_prodi' => $prodi->id, 'sks' => 3]);
+        $km = KurikulumMatkul::factory()->create(['id_matkul' => $matkul->id, 'sks' => 3]);
+        $kelas = Kelas::factory()->create(['id_prodi' => $prodi->id, 'id_kurikulum_matkul' => $km->id, 'id_semester' => $semester->id]);
+        Krs::factory()->create(['id_mahasiswa' => $mhs->id, 'id_kelas' => $kelas->id]);
+    }
+
+    $groups = Livewire::actingAs(kaprodiUser($prodi))
+        ->test(Index::class)
+        ->call('openDetailModal', $mhs->id)
+        ->instance()
+        ->detailKrsBySemester();
+
+    expect(array_column(array_column($groups, 'semester'), 'kode'))->toBe(['20252', '20241', '20232']);
+});

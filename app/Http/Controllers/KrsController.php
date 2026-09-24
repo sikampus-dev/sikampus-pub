@@ -998,7 +998,7 @@ class KrsController extends Controller
         }
 
         usort($krsBySemester, function ($a, $b) {
-            return $b['semester']['id'] <=> $a['semester']['id'];
+            return $b['semester']['kode'] <=> $a['semester']['kode'];
         });
 
         return [
@@ -1165,7 +1165,7 @@ class KrsController extends Controller
             ];
         }
         usort($krsBySemester, function ($a, $b) {
-            return $b['semester']['id'] <=> $a['semester']['id'];
+            return $b['semester']['kode'] <=> $a['semester']['kode'];
         });
 
         return response()->json([
