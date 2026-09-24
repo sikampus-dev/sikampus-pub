@@ -29,6 +29,25 @@ class Dashboard extends Component
     }
 
     /**
+     * Nama dosen lengkap dengan gelar depan/belakang (kalau ada) untuk subtitle "Selamat datang,
+     * ..." — bukan Auth::user()->name mentah. Pola penggabungannya sama dengan yang sudah dipakai
+     * di banyak tempat lain (mis. App\Livewire\Dosen\Jadwal\Detail) dan di composer
+     * layouts.dosen (dosenSidebarNamaLengkap) untuk kartu info sidebar.
+     */
+    #[Computed]
+    public function namaLengkapDosen(): string
+    {
+        $dosen = Dosen::find($this->dosenId);
+        $nama = trim(
+            ($dosen?->gelar_depan ? $dosen->gelar_depan.' ' : '').
+            (string) ($dosen?->nama ?? Auth::user()?->name ?? '').
+            ($dosen?->gelar_belakang ? ', '.$dosen->gelar_belakang : '')
+        );
+
+        return $nama !== '' ? $nama : (string) (Auth::user()?->name ?? 'Dosen');
+    }
+
+    /**
      * Kartu aksi cepat — sama seperti quick actions di dosen/page.tsx (Jadwal, Dosen Wali,
      * Persetujuan KRS, Nilai). Route::has() jaga-jaga selama modulnya masih coming-soon.
      */

@@ -193,7 +193,19 @@ class AppServiceProvider extends ServiceProvider
             $user = auth()->user();
             $dosen = $user ? Dosen::where('id_user', $user->id)->first() : null;
 
+            // Nama + gelar depan/belakang (kalau ada) — dipakai di kartu info sidebar, bukan
+            // $authUser->name mentah. Pola penggabungannya sama dengan yang sudah dipakai di
+            // banyak view lain (mis. resources/views/livewire/dosen/jadwal/detail.blade.php).
+            $namaLengkap = $dosen
+                ? trim(
+                    ($dosen->gelar_depan ? $dosen->gelar_depan.' ' : '').
+                    (string) ($dosen->nama ?? $user?->name ?? '').
+                    ($dosen->gelar_belakang ? ', '.$dosen->gelar_belakang : '')
+                )
+                : ($user?->name ?? '');
+
             $view->with([
+                'dosenSidebarNamaLengkap' => $namaLengkap !== '' ? $namaLengkap : ($user?->name ?? ''),
                 'dosenSidebarKodeDosen' => $dosen?->kode_dosen,
                 'dosenSidebarFotoUrl' => $dosen?->foto ? asset('storage/'.ltrim($dosen->foto, '/')) : null,
                 'dosenHasProdiScope' => $user?->hasProdiScope() ?? false,

@@ -9,11 +9,14 @@ use App\Models\KelasDosen;
 use App\Models\Semester;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -22,25 +25,47 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class Index extends Component
 {
+    use WithPagination;
+
     #[Locked]
     public int $dosenId;
 
     /**
      * Terikat ke query string `id_semester` supaya tautan "Kembali" dari halaman rincian bisa
      * mengembalikan pengguna ke semester yang sedang dilihatnya, bukan selalu ke semester aktif.
+     *
+     * Sebelumnya SENGAJA dibiarkan kosong (semua semester) secara default, dengan alasan isi
+     * arsip justru semester-semester yang sudah lewat sehingga mengunci ke semester aktif
+     * nyaris selalu tampak kosong. Atas permintaan eksplisit pengguna, default itu dibalik jadi
+     * semester aktif — tapi HANYA kalau belum ada nilai dari query string, supaya tautan
+     * "Kembali" masih menghormati semester yang sedang dilihat.
      */
     #[Url(as: 'id_semester')]
     public string $filterSemester = '';
+
+    public string $search = '';
+
+    public int $perPage = 10;
 
     public function mount(): void
     {
         $dosen = Dosen::where('id_user', Auth::id())->firstOrFail();
         $this->dosenId = $dosen->id;
 
-        // Sengaja TIDAK dikunci ke semester aktif seperti halaman Kelas/Jadwal: isi arsip justru
-        // semester-semester yang sudah lewat, jadi membuka halaman dengan filter semester aktif
-        // membuatnya nyaris selalu tampak kosong. Default di sini = semua semester, dan nilai dari
-        // query string `id_semester` (tautan "Kembali") dibiarkan apa adanya.
+        if ($this->filterSemester === '') {
+            $activeSemester = Semester::where('is_active', true)->whereNull('deleted_at')->first();
+            $this->filterSemester = $activeSemester ? (string) $activeSemester->id : '';
+        }
+    }
+
+    public function updatingFilterSemester(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
     }
 
     #[Computed]
@@ -54,7 +79,9 @@ class Index extends Component
     }
 
     /**
-     * Daftar kelas unik yang pernah diampu dosen ini, satu baris per kelas.
+     * Daftar kelas unik yang pernah diampu dosen ini, satu baris per kelas — tidak dipaginasi,
+     * dipakai sebagai basis untuk rows() (tampilan, dipaginasi) dan exportRows() (ekspor, seluruh
+     * baris yang cocok filter/pencarian, bukan cuma satu halaman).
      *
      * Sumbernya SENGAJA dua tabel — beda dengan JadwalDosenController::getMyJadwal yang hanya
      * membaca jadwal_dosen:
@@ -64,10 +91,9 @@ class Index extends Component
      * Tanpa kelas_dosen, kelas yang punya pengampu tapi belum/tidak punya slot jadwal tidak akan
      * pernah muncul di arsip walau jelas diampu.
      *
-     * @return array<int, Kelas>
+     * @return Collection<int, Kelas>
      */
-    #[Computed]
-    public function rows(): array
+    private function allRows(): Collection
     {
         $kelasIdsDariJadwal = JadwalDosen::where('id_dosen', $this->dosenId)
             ->where('status', 'active')
@@ -87,26 +113,65 @@ class Index extends Component
             ->all();
 
         if ($kelasIds === []) {
-            return [];
+            return collect();
         }
+
+        $search = trim($this->search);
 
         return Kelas::with(['kurikulumMatkul.matkul', 'prodi', 'semester'])
             ->whereIn('id', $kelasIds)
             ->whereNull('deleted_at')
             // Filter semester diterapkan di sini, bukan per sumber, supaya aturannya satu tempat.
             ->when($this->filterSemester !== '', fn ($q) => $q->where('id_semester', (int) $this->filterSemester))
+            // Pencarian mengikuti kolom yang sama dengan yang ditampilkan (kodeMatkulLabel/
+            // namaMatkulLabel): override di kurikulum_matkul kalau ada, kalau tidak dari matkul.
+            ->when($search !== '', function ($q) use ($search) {
+                $q->whereHas('kurikulumMatkul', function ($qq) use ($search) {
+                    $qq->where('kode_matkul', 'like', "%{$search}%")
+                        ->orWhere('nama_matkul', 'like', "%{$search}%")
+                        ->orWhereHas('matkul', function ($qqq) use ($search) {
+                            $qqq->where('kode', 'like', "%{$search}%")
+                                ->orWhere('nama', 'like', "%{$search}%");
+                        });
+                });
+            })
             ->get()
             // Daftar ini lintas semester, jadi semester terbaru didahulukan; di dalam satu semester
             // urutannya tetap menurut kode mata kuliah seperti sebelumnya.
             ->sortBy(fn (Kelas $k) => $k->kurikulumMatkul?->kodeMatkulLabel() ?? '')
             ->sortByDesc(fn (Kelas $k) => $k->semester?->kode ?? '')
-            ->values()
-            ->all();
+            ->values();
     }
 
     /**
-     * Baris siap cetak untuk kedua format ekspor — diambil dari computed rows() supaya isi
-     * berkas selalu mengikuti filter semester yang sedang aktif di layar.
+     * allRows() dipaginasi manual (bukan ->paginate() Eloquent) karena urutannya berasal dari
+     * atribut relasi (kodeMatkulLabel/semester->kode dengan fallback), bukan kolom tunggal yang
+     * bisa langsung di-ORDER BY — dataset per dosen ini juga kecil (kelas yang pernah ia ampu
+     * seumur hidup), jadi memuat semuanya lalu memaginasi di memori aman dan tidak butuh subquery
+     * ORDER BY yang rumit.
+     */
+    #[Computed]
+    public function rows(): LengthAwarePaginator
+    {
+        $all = $this->allRows();
+        $perPage = $this->perPage;
+        $currentPage = $this->getPage();
+
+        $items = $all->slice(($currentPage - 1) * $perPage, $perPage)->values();
+
+        return new LengthAwarePaginator(
+            $items,
+            $all->count(),
+            $perPage,
+            $currentPage,
+            ['path' => request()->url(), 'pageName' => 'page']
+        );
+    }
+
+    /**
+     * Baris siap cetak untuk kedua format ekspor — diambil dari allRows() (SELURUH baris yang
+     * cocok filter semester & pencarian, bukan cuma satu halaman) supaya isi berkas ekspor tidak
+     * ikut terpotong oleh paginasi tampilan.
      *
      * Pola ekspornya sengaja disalin dari App\Livewire\Dosen\Kelas\Index (bukan di-share lewat
      * trait), mengikuti kebiasaan repo ini menyalin Concerns per modul: kolomnya memang berbeda,
@@ -118,7 +183,7 @@ class Index extends Component
     {
         $hasil = [];
 
-        foreach ($this->rows as $idx => $kelas) {
+        foreach ($this->allRows() as $idx => $kelas) {
             $km = $kelas->kurikulumMatkul;
             $semester = $kelas->semester;
 

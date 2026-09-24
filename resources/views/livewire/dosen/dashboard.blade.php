@@ -1,6 +1,6 @@
 @section('title', 'Dashboard — ' . config('app.name'))
 @section('header_title', 'Dashboard')
-@section('header_subtitle', 'Selamat datang, ' . (auth()->user()->name ?? 'Dosen'))
+@section('header_subtitle', 'Selamat datang, ' . $this->namaLengkapDosen)
 
 <div class="space-y-6">
     @if (count($this->quickLinks) > 0)

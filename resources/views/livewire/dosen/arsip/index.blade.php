@@ -9,7 +9,7 @@
          supaya wire:click-nya terikat — lihat catatan di livewire/mahasiswa/krs/index.blade.php. --}}
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-2">
-            @if (! empty($rows))
+            @if ($rows->isNotEmpty())
                 <button
                     type="button"
                     wire:click="exportExcel"
@@ -42,12 +42,26 @@
     </div>
 
     <div class="rounded-2xl bg-white shadow-border">
-        @if (empty($rows))
+        <div class="border-b border-neutral-100 p-4">
+            <div class="relative max-w-md">
+                <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden="true"></i>
+                <input
+                    type="text"
+                    wire:model.live.debounce.400ms="search"
+                    placeholder="Cari kode atau nama mata kuliah..."
+                    class="w-full rounded-lg py-2 pl-9 pr-3 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"
+                />
+            </div>
+        </div>
+
+        @if ($rows->isEmpty())
             <div class="p-10 text-center">
                 <i data-lucide="archive" class="mx-auto mb-4 h-10 w-10 text-neutral-300" aria-hidden="true"></i>
                 <p class="font-medium text-neutral-600">Tidak ada arsip kelas</p>
                 <p class="mt-1 text-sm text-neutral-500">
-                    @if ($filterSemester !== '')
+                    @if ($search !== '')
+                        Tidak ada mata kuliah yang cocok dengan pencarian "{{ $search }}".
+                    @elseif ($filterSemester !== '')
                         Tidak ada kelas yang Anda ampu pada semester yang dipilih. Coba pilih "Semua semester".
                     @else
                         Anda belum pernah tercatat sebagai pengampu kelas.
@@ -99,6 +113,10 @@
                         @endforeach
                     </tbody>
                 </table>
+            </div>
+
+            <div class="border-t border-neutral-100 p-4">
+                {{ $rows->links() }}
             </div>
         @endif
     </div>

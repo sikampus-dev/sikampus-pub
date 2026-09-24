@@ -90,7 +90,7 @@
                 @if ($dosenSidebarFotoUrl ?? null)
                     <img
                         src="{{ $dosenSidebarFotoUrl }}"
-                        alt="{{ $authUser->name ?? '' }}"
+                        alt="{{ $dosenSidebarNamaLengkap ?? $authUser->name ?? '' }}"
                         class="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-neutral-200"
                     />
                 @else
@@ -99,7 +99,7 @@
                     </div>
                 @endif
                 <div class="min-w-0">
-                    <p class="truncate text-sm font-semibold text-neutral-900">{{ $authUser->name ?? '' }}</p>
+                    <p class="truncate text-sm font-semibold text-neutral-900">{{ $dosenSidebarNamaLengkap ?? $authUser->name ?? '' }}</p>
                     @if ($dosenSidebarKodeDosen ?? null)
                         <p class="truncate text-xs text-neutral-500">Kode: {{ $dosenSidebarKodeDosen }}</p>
                     @endif

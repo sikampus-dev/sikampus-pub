@@ -30,3 +30,20 @@ it('does not show a standalone Kehadiran sidebar item — it lives under the Jad
 
     expect($html)->not->toContain(route('dosen.kehadiran'));
 });
+
+it('shows gelar depan and gelar belakang alongside the dosen name in the sidebar and the dashboard subtitle', function () {
+    $dosen = dosenUser([], ['nama' => 'Budi Santoso', 'gelar_depan' => 'Dr.', 'gelar_belakang' => 'M.Kom.']);
+
+    $html = $this->actingAs($dosen)->get(route('dosen.dashboard'))->getContent();
+
+    expect($html)->toContain('Dr. Budi Santoso, M.Kom.');
+});
+
+it('falls back to the plain name when the dosen has no gelar depan or gelar belakang', function () {
+    $dosen = dosenUser([], ['nama' => 'Citra Lestari', 'gelar_depan' => null, 'gelar_belakang' => null]);
+
+    $html = $this->actingAs($dosen)->get(route('dosen.dashboard'))->getContent();
+
+    expect($html)->toContain('Citra Lestari')
+        ->not->toContain('Citra Lestari,');
+});
