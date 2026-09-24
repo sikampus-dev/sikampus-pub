@@ -96,6 +96,15 @@
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-lg font-semibold text-neutral-900">Daftar KRS</h2>
             <div class="print:hidden flex items-center gap-3">
+                <div class="relative w-64">
+                    <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden="true"></i>
+                    <input
+                        type="text"
+                        wire:model.live.debounce.400ms="search"
+                        placeholder="Cari kode atau nama mata kuliah..."
+                        class="w-full rounded-lg py-2 pl-9 pr-3 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"
+                    />
+                </div>
                 <div class="w-56">
                     <x-searchable-select
                         model="filterSemester"
@@ -156,12 +165,13 @@
             @endif
         </div>
 
-        {{-- wire:target menyebut nama properti filter/toggle secara eksplisit, bukan dibiarkan
-             kosong: kalau kosong, wire:loading ikut menyala untuk request LAIN dari komponen ini
-             (mis. hapus satu baris), padahal yang diminta cuma indikator untuk filter. --}}
+        {{-- wire:target menyebut nama properti filter/pencarian/toggle secara eksplisit, bukan
+             dibiarkan kosong: kalau kosong, wire:loading ikut menyala untuk request LAIN dari
+             komponen ini (mis. hapus satu baris), padahal yang diminta cuma indikator untuk
+             filter dan pencarian. --}}
         <div
             wire:loading.flex
-            wire:target="filterSemester, showTrashed"
+            wire:target="search, filterSemester, showTrashed"
             class="print:hidden mb-4 items-center gap-2 rounded-lg bg-neutral-50 px-4 py-2 text-xs font-medium text-neutral-500"
         >
             <i data-lucide="loader-2" class="h-3.5 w-3.5 animate-spin" aria-hidden="true"></i>
@@ -171,7 +181,7 @@
         <div
             class="overflow-x-auto"
             wire:loading.class="opacity-50 pointer-events-none"
-            wire:target="filterSemester, showTrashed"
+            wire:target="search, filterSemester, showTrashed"
         >
             <table class="w-full text-left text-sm">
                 <thead class="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">

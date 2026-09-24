@@ -26,6 +26,8 @@ class Show extends Component
 
     public int $mahasiswaId;
 
+    public string $search = '';
+
     public string $filterSemester = '';
 
     public ?int $confirmDeleteId = null;
@@ -310,6 +312,16 @@ class Show extends Component
             });
         }
 
+        // Sama seperti pencarian di Nilai\Show — cari lewat kode atau nama mata kuliah, bukan lewat
+        // kelas itu sendiri.
+        if ($this->search !== '') {
+            $s = $this->search;
+            $query->whereHas('kelas.kurikulumMatkul.matkul', function ($q) use ($s) {
+                $q->where('nama', 'like', "%{$s}%")
+                    ->orWhere('kode', 'like', "%{$s}%");
+            });
+        }
+
         // Diurutkan berdasarkan nama mata kuliah; created_at tetap jadi tie-breaker karena
         // sortBy di PHP 8 stabil.
         return UrutanMatkulService::urutkanKrs($query->orderByDesc('created_at')->get());
@@ -339,6 +351,12 @@ class Show extends Component
 
     // Centang dibuang setiap kali daftarnya berubah: baris yang tidak lagi terlihat tetap ikut
     // terhapus kalau centangnya dibiarkan, dan tidak ada yang sadar sampai datanya hilang.
+    public function updatingSearch(): void
+    {
+        $this->selected = [];
+        unset($this->krsList, $this->summary);
+    }
+
     public function updatingFilterSemester(): void
     {
         $this->selected = [];

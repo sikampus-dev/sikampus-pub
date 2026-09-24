@@ -119,12 +119,39 @@ it('shows a loading indicator scoped to the search/filter fields and pagination 
         ->assertSee('wire:target="search, filterProdi, filterSemester, filterStatusPengajuan, gotoPage, previousPage, nextPage"', escape: false);
 });
 
-it('shows a loading indicator scoped to the filter/toggle fields on the show page', function () {
+it('shows a loading indicator scoped to the search/filter/toggle fields on the show page', function () {
     $mahasiswa = Mahasiswa::factory()->create();
 
     Livewire::actingAs(adminUser())
         ->test(Show::class, ['id' => $mahasiswa->id])
-        ->assertSee('wire:target="filterSemester, showTrashed"', escape: false);
+        ->assertSee('wire:target="search, filterSemester, showTrashed"', escape: false);
+});
+
+it('searches the krs list on the show page by matkul kode or nama', function () {
+    $mahasiswa = Mahasiswa::factory()->create();
+
+    $matkulA = Matkul::factory()->create(['nama' => 'Kalkulus Lanjut', 'kode' => 'MK-100']);
+    $kelasA = Kelas::factory()->create();
+    $kelasA->kurikulumMatkul()->update(['id_matkul' => $matkulA->id]);
+    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelasA->id]);
+
+    $matkulB = Matkul::factory()->create(['nama' => 'Fisika Dasar', 'kode' => 'MK-200']);
+    $kelasB = Kelas::factory()->create();
+    $kelasB->kurikulumMatkul()->update(['id_matkul' => $matkulB->id]);
+    Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelasB->id]);
+
+    $component = Livewire::actingAs(adminUser())
+        ->test(Show::class, ['id' => $mahasiswa->id])
+        ->assertSee('Kalkulus Lanjut')
+        ->assertSee('Fisika Dasar');
+
+    $component->set('search', 'Kalkulus')
+        ->assertSee('Kalkulus Lanjut')
+        ->assertDontSee('Fisika Dasar');
+
+    $component->set('search', 'MK-200')
+        ->assertSee('Fisika Dasar')
+        ->assertDontSee('Kalkulus Lanjut');
 });
 
 it('admin dengan scope prodi hanya melihat KRS mahasiswa di prodinya', function () {
