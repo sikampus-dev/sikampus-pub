@@ -65,7 +65,11 @@ class Index extends Component
             $krsBySemester[$semesterId]['krs'][] = $krs;
         }
 
-        usort($krsBySemester, fn ($a, $b) => $b['semester']->id <=> $a['semester']->id);
+        // Terbaru dulu berdasarkan kode semester ('20241', '20242', ...), BUKAN id: id hanya
+        // urutan pembuatan baris, dan semester lama bisa diinput belakangan sehingga dapat id
+        // lebih besar (mis. '20232' ber-id 5 padahal '20241' ber-id 1) — sort per id membuat
+        // semester lama itu naik ke atas. Sama dengan KrsController::getKrsBySemester.
+        usort($krsBySemester, fn ($a, $b) => $b['semester']->kode <=> $a['semester']->kode);
 
         return array_values($krsBySemester);
     }

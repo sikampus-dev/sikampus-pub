@@ -2056,9 +2056,12 @@ class KrsController extends Controller
             ];
         }
 
-        // Sort berdasarkan semester (terbaru dulu)
+        // Sort berdasarkan semester (terbaru dulu). Pakai kode ('20241', '20242', ...), BUKAN id:
+        // id hanya urutan pembuatan baris, dan semester lama bisa saja diinput belakangan sehingga
+        // dapat id lebih besar (mis. '20232' dengan id 5, padahal '20241' ber-id 1) — kalau di-sort
+        // per id, semester lama itu ikut naik ke atas.
         usort($krsBySemester, function ($a, $b) {
-            return $b['semester']['id'] <=> $a['semester']['id'];
+            return $b['semester']['kode'] <=> $a['semester']['kode'];
         });
 
         return response()->json([
@@ -2135,7 +2138,8 @@ class KrsController extends Controller
                 'approved_at' => $krs->approved_at ? $krs->approved_at->format('Y-m-d H:i:s') : null,
             ];
         }
-        usort($krsBySemester, fn ($a, $b) => $b['semester']['id'] <=> $a['semester']['id']);
+        // Kode, bukan id — alasannya sama seperti di getKrsBySemester().
+        usort($krsBySemester, fn ($a, $b) => $b['semester']['kode'] <=> $a['semester']['kode']);
         $krsBySemester = array_values($krsBySemester);
 
         $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>

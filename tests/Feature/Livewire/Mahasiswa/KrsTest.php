@@ -45,6 +45,28 @@ it('lists krs grouped by semester with total sks and approval status', function 
         ->assertSee('Disetujui');
 });
 
+it('orders semester groups by kode, newest first, even when an older semester was created later', function () {
+    [$user, $mahasiswa] = krsMahasiswaUser();
+
+    // Urutan pembuatan sengaja dibuat tidak kronologis: semester paling lama ('20232') dibuat
+    // paling akhir sehingga id-nya paling besar. Sort per id akan menaruhnya di puncak; sort per
+    // kode harus tetap menempatkannya di dasar.
+    $semesterTengah = Semester::factory()->create(['kode' => '20241', 'nama' => 'Ganjil 2024']);
+    $semesterBaru = Semester::factory()->create(['kode' => '20252', 'nama' => 'Genap 2025']);
+    $semesterLama = Semester::factory()->create(['kode' => '20232', 'nama' => 'Genap 2023']);
+
+    expect($semesterLama->id)->toBeGreaterThan($semesterBaru->id);
+
+    foreach ([$semesterLama, $semesterTengah, $semesterBaru] as $semester) {
+        $kelas = Kelas::factory()->create(['id_semester' => $semester->id]);
+        Krs::factory()->create(['id_mahasiswa' => $mahasiswa->id, 'id_kelas' => $kelas->id]);
+    }
+
+    $this->actingAs($user)->get(route('mahasiswa.krs'))
+        ->assertOk()
+        ->assertSeeInOrder(['Genap 2025', 'Ganjil 2024', 'Genap 2023']);
+});
+
 it('streams a pdf download when exporting krs', function () {
     [$user, $mahasiswa] = krsMahasiswaUser();
     $semester = Semester::factory()->create();
