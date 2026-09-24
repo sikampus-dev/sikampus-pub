@@ -49,6 +49,35 @@ it('adds and deletes a mahasiswa bimbingan', function () {
     expect(DosenWali::find($dosenWali->id))->toBeNull();
 });
 
+it('keeps the add modal open and reset after a successful save so the next mahasiswa can be added', function () {
+    $admin = adminUser();
+    $dosen = Dosen::factory()->create();
+    $pertama = Mahasiswa::factory()->create(['nama' => 'Mahasiswa Pertama']);
+    $kedua = Mahasiswa::factory()->create(['nama' => 'Mahasiswa Kedua']);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['id' => $dosen->id])
+        ->call('openModal')
+        ->call('selectMahasiswa', $pertama->id, $pertama->nim.' - '.$pertama->nama)
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSet('showModal', true)
+        ->assertSet('selectedMahasiswaId', null)
+        ->assertSet('mahasiswaSearch', '')
+        ->assertSet('lastAddedLabel', $pertama->nim.' - '.$pertama->nama)
+        ->assertSee('Mahasiswa Pertama')
+        ->call('selectMahasiswa', $kedua->id, $kedua->nim.' - '.$kedua->nama)
+        ->assertSet('lastAddedLabel', '')
+        ->call('save')
+        ->assertSet('showModal', true)
+        ->assertSee('Mahasiswa Kedua')
+        ->call('closeModal')
+        ->assertSet('showModal', false)
+        ->assertSet('lastAddedLabel', '');
+
+    expect(DosenWali::where('id_dosen', $dosen->id)->count())->toBe(2);
+});
+
 it('blocks adding a mahasiswa bimbingan once the dosen kuota is reached', function () {
     $admin = adminUser();
     $dosen = Dosen::factory()->create(['kuota_bimbingan_akademik' => 1]);

@@ -152,6 +152,13 @@
                 </div>
 
                 <form wire:submit="save" class="space-y-4 p-6">
+                    @if ($lastAddedLabel !== '')
+                        <div class="flex gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+                            <i data-lucide="check-circle" class="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true"></i>
+                            <span><span class="font-medium">{{ $lastAddedLabel }}</span> berhasil ditambahkan. Pilih mahasiswa berikutnya atau tutup modal.</span>
+                        </div>
+                    @endif
+
                     <div>
                         <label class="mb-1.5 block text-sm font-medium text-neutral-700">Mahasiswa *</label>
 
@@ -166,6 +173,7 @@
                             <div class="relative">
                                 <input
                                     type="text"
+                                    x-init="$nextTick(() => $el.focus())"
                                     wire:model.live.debounce.300ms="mahasiswaSearch"
                                     placeholder="Cari NIM atau nama mahasiswa..."
                                     class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 @error('selectedMahasiswaId') ring-2 ring-red-500 @enderror shadow-border"
@@ -203,7 +211,7 @@
 
                     <div class="flex items-center gap-3 border-t border-neutral-200 pt-4">
                         <button type="button" wire:click="closeModal" class="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 shadow-border">
-                            Batal
+                            {{ $lastAddedLabel !== '' ? 'Selesai' : 'Batal' }}
                         </button>
                         <button type="submit" class="flex-1 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800">
                             Simpan

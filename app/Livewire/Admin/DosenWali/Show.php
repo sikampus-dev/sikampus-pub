@@ -34,6 +34,10 @@ class Show extends Component
 
     public string $selectedMahasiswaLabel = '';
 
+    // Umpan balik di dalam modal — banner session('status') di halaman tertutup overlay selama
+    // modal tetap terbuka untuk input berikutnya.
+    public string $lastAddedLabel = '';
+
     public ?int $confirmingDeleteId = null;
 
     public function mount(int $id): void
@@ -135,12 +139,14 @@ class Show extends Component
         $this->selectedMahasiswaId = null;
         $this->selectedMahasiswaLabel = '';
         $this->mahasiswaSearch = '';
+        $this->lastAddedLabel = '';
         $this->showModal = true;
     }
 
     public function closeModal(): void
     {
         $this->showModal = false;
+        $this->lastAddedLabel = '';
     }
 
     public function selectMahasiswa(int $id, string $label): void
@@ -148,6 +154,7 @@ class Show extends Component
         $this->selectedMahasiswaId = $id;
         $this->selectedMahasiswaLabel = $label;
         $this->mahasiswaSearch = '';
+        $this->lastAddedLabel = '';
     }
 
     /**
@@ -204,9 +211,16 @@ class Show extends Component
             ]);
         }
 
-        unset($this->bimbinganList);
-        $this->closeModal();
-        session()->flash('status', 'Mahasiswa bimbingan berhasil ditambahkan.');
+        // Modal sengaja dibiarkan terbuka dan dikosongkan supaya admin bisa langsung menambah
+        // mahasiswa berikutnya. Kembali ke halaman 1 karena daftar diurutkan created_at desc —
+        // baris yang baru ditambahkan ada di sana.
+        $this->lastAddedLabel = $this->selectedMahasiswaLabel;
+        $this->selectedMahasiswaId = null;
+        $this->selectedMahasiswaLabel = '';
+        $this->mahasiswaSearch = '';
+        $this->resetValidation();
+        $this->resetPage('mhs_page');
+        unset($this->bimbinganList, $this->mahasiswaResults);
     }
 
     public function confirmDelete(int $id): void
