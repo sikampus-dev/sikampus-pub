@@ -3,6 +3,7 @@
 use App\Livewire\Admin\Pengguna\Form;
 use App\Livewire\Admin\Pengguna\Index;
 use App\Livewire\Admin\Pengguna\Show;
+use App\Models\Mahasiswa;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserRole;
@@ -122,6 +123,60 @@ it('rejects assigning a spatie role to a mahasiswa account through the show page
         ->assertHasErrors(['selectedRoleIds']);
 
     expect($mahasiswaUser->fresh()->hasRole('Akademik'))->toBeFalse();
+});
+
+it('finds a mahasiswa without an existing account in the picker search', function () {
+    $admin = adminUser();
+    Mahasiswa::factory()->create(['nama' => 'Uji Coba Pencarian', 'nim' => '2099001']);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('role', 'mahasiswa')
+        ->set('mahasiswaSearch', 'Uji Coba Pencarian')
+        ->assertSee('2099001')
+        ->assertSee('Uji Coba Pencarian');
+});
+
+it('excludes a mahasiswa who already has a user account from the picker search', function () {
+    $admin = adminUser();
+    $existingUser = User::factory()->create(['role' => 'mahasiswa']);
+    Mahasiswa::factory()->create([
+        'nama' => 'Sudah Punya Akun',
+        'nim' => '2099002',
+        'id_user' => $existingUser->id,
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('role', 'mahasiswa')
+        ->set('mahasiswaSearch', 'Sudah Punya Akun')
+        ->assertDontSee('2099002')
+        ->assertSee('Tidak ada hasil');
+});
+
+it('shows a hint to narrow the search when mahasiswa results exceed the picker limit', function () {
+    $admin = adminUser();
+    foreach (['A', 'B', 'C', 'D', 'E'] as $suffix) {
+        Mahasiswa::factory()->create(['nama' => "Banyak Hasil {$suffix}"]);
+    }
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('mahasiswaSearchLimit', 3)
+        ->set('role', 'mahasiswa')
+        ->set('mahasiswaSearch', 'Banyak Hasil')
+        ->assertSee('Menampilkan 3 hasil teratas');
+});
+
+it('does not show the narrow-search hint when mahasiswa results are within the picker limit', function () {
+    $admin = adminUser();
+    Mahasiswa::factory()->create(['nama' => 'Hasil Tunggal Saja']);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('role', 'mahasiswa')
+        ->set('mahasiswaSearch', 'Hasil Tunggal Saja')
+        ->assertDontSee('hasil teratas');
 });
 
 it('automatically assigns the chosen spatie role — and its permissions — when creating an admin account', function () {

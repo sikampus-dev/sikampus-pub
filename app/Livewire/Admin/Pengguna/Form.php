@@ -14,6 +14,12 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    // Batas hasil pencarian mahasiswa — bukan seluruh data, cuma cari-lalu-pilih (lihat catatan
+    // di mahasiswaResults()). Dinaikkan dari 20 karena pencarian nama umum bisa cocok >20 baris
+    // dan mahasiswa yang dicari admin (yang belum punya akun sekalipun) jadi tidak pernah
+    // terlihat kalau kebetulan jatuh di luar batas — bukan datanya hilang, cuma tidak ditampilkan.
+    public int $mahasiswaSearchLimit = 50;
+
     public ?int $penggunaId = null;
 
     public string $name = '';
@@ -81,6 +87,12 @@ class Form extends Component
         $this->spatieRoleId = null;
     }
 
+    /**
+     * Ambil 1 baris lebih banyak dari $mahasiswaSearchLimit — bukan untuk ditampilkan, cuma
+     * penanda apakah hasilnya terpotong, supaya admin diberi tahu untuk mempersempit pencarian
+     * alih-alih mengira mahasiswanya tidak ada. Lihat mahasiswaResultsTruncated() dan
+     * form.blade.php (yang men-take() hasilnya ke $mahasiswaSearchLimit sebelum dirender).
+     */
     #[Computed]
     public function mahasiswaResults()
     {
@@ -95,8 +107,13 @@ class Form extends Component
                     ->orWhere('nim', 'like', "%{$this->mahasiswaSearch}%");
             })
             ->orderBy('nama')
-            ->limit(20)
+            ->limit($this->mahasiswaSearchLimit + 1)
             ->get(['id', 'nama', 'nim']);
+    }
+
+    public function mahasiswaResultsTruncated(): bool
+    {
+        return $this->mahasiswaResults->count() > $this->mahasiswaSearchLimit;
     }
 
     #[Computed]

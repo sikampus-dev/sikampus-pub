@@ -60,7 +60,7 @@
                             />
                             @if ($mahasiswaSearch !== '')
                                 <div class="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg bg-white shadow-border-lg">
-                                    @forelse ($this->mahasiswaResults as $m)
+                                    @forelse ($this->mahasiswaResults->take($mahasiswaSearchLimit) as $m)
                                         <button
                                             type="button"
                                             wire:click="selectMahasiswa({{ $m->id }})"
@@ -70,8 +70,13 @@
                                             <span class="text-neutral-500"> — {{ $m->nama }}</span>
                                         </button>
                                     @empty
-                                        <p class="px-3 py-2 text-sm text-neutral-500">Tidak ada hasil untuk "{{ $mahasiswaSearch }}".</p>
+                                        <p class="px-3 py-2 text-sm text-neutral-500">Tidak ada hasil untuk "{{ $mahasiswaSearch }}". Mahasiswa yang sudah memiliki akun tidak ikut ditampilkan di sini.</p>
                                     @endforelse
+                                    @if ($this->mahasiswaResultsTruncated())
+                                        <p class="border-t border-neutral-100 px-3 py-2 text-xs text-neutral-400">
+                                            Menampilkan {{ $mahasiswaSearchLimit }} hasil teratas. Perjelas pencarian (mis. ketik NIM lengkap) untuk menemukan mahasiswa lain.
+                                        </p>
+                                    @endif
                                 </div>
                             @endif
                         </div>
