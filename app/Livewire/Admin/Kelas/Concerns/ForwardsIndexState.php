@@ -17,7 +17,7 @@ trait ForwardsIndexState
     protected function resolveBackUrl(): void
     {
         $forwarded = collect(request()->query())
-            ->only(['search', 'id_prodi', 'id_semester', 'id_kelompok_kelas', 'page'])
+            ->only(['search', 'id_prodi', 'id_semester', 'id_kelompok_kelas', 'id_angkatan', 'page'])
             ->filter(fn ($value) => $value !== null && $value !== '')
             ->all();
 

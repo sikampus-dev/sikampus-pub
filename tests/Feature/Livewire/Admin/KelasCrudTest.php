@@ -58,7 +58,7 @@ it('creates, updates, and deletes a kelas', function () {
         ->set('id_dosen_pic', $dosen->id)
         ->set('kode', 'A')
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester2->id]));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester2->id, 'id_angkatan' => $semester1->id]));
 
     $kelas = Kelas::where('kode', 'A')->firstOrFail();
     expect($kelas->id_dosen_pic)->toBe($dosen->id);
@@ -211,7 +211,7 @@ it('does not create any jadwal when buatJadwalOtomatis is left off', function ()
         ->set('id_semester', $semester->id)
         ->set('id_angkatan', $semester->id)
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id]));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id, 'id_angkatan' => $semester->id]));
 
     $kelas = Kelas::where('id_kurikulum_matkul', $kurikulumMatkul->id)->firstOrFail();
     expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(0);
@@ -241,7 +241,7 @@ it('creates N jadwal slots with the kelas team as dosen when buatJadwalOtomatis 
         ->set('jadwalJamSelesai', '10:00')
         ->set('jadwalIdRuangan', $ruangan->id)
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id]));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id, 'id_angkatan' => $semester->id]));
 
     $kelas = Kelas::where('id_kurikulum_matkul', $kurikulumMatkul->id)->firstOrFail();
     $jadwalRows = Jadwal::where('id_kelas', $kelas->id)->orderBy('urutan_pertemuan')->get();
@@ -298,7 +298,7 @@ it('lets an existing kelas generate jadwal on edit, but rejects it when a slot i
         ->test(Form::class, ['id' => $kelas->id])
         ->set('buatJadwalOtomatis', true)
         ->call('save')
-        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $kelas->id_prodi, 'id_semester' => $kelas->id_semester]));
+        ->assertRedirect(route('admin.akademik.kelas', ['id_prodi' => $kelas->id_prodi, 'id_semester' => $kelas->id_semester, 'id_angkatan' => $kelas->id_angkatan]));
 
     expect(Jadwal::where('id_kelas', $kelas->id)->whereNull('id_ruangan')->count())->toBe(2);
 });
@@ -1008,19 +1008,42 @@ it('carries the forwarded state into the edit form Batal link', function () {
         ->assertDontSee('unexpected=1');
 });
 
+// Ditambahkan bareng filter Angkatan (lihat catatan di Kelas\Index) tapi sempat lupa disertakan
+// di whitelist ForwardsIndexState — Batal/Kembali diam-diam membuang filter Angkatan yang sedang
+// aktif sebelum form/detail dibuka.
+it('carries id_angkatan from the query string into the edit form Batal link and the show page Kembali/Ubah links', function () {
+    $admin = adminUser();
+    $angkatan = Semester::factory()->create();
+    $kelas = Kelas::factory()->create(['id_angkatan' => $angkatan->id]);
+
+    $expectedBackUrl = route('admin.akademik.kelas')."?id_angkatan={$angkatan->id}";
+
+    $this->actingAs($admin)
+        ->get(route('admin.akademik.kelas.edit', $kelas->id)."?id_angkatan={$angkatan->id}")
+        ->assertOk()
+        ->assertSee($expectedBackUrl);
+
+    $this->actingAs($admin)
+        ->get(route('admin.akademik.kelas.show', $kelas->id)."?id_angkatan={$angkatan->id}")
+        ->assertOk()
+        ->assertSee($expectedBackUrl)
+        ->assertSee("id_angkatan={$angkatan->id}");
+});
+
 // Beda dari tombol Batal di atas: begitu simpan BERHASIL, redirect sengaja tidak memakai backUrl
-// (filter dari sebelum form dibuka) — diarahkan ke filter prodi & semester milik kelas yang baru
-// saja disimpan, supaya langsung kelihatan di daftar tanpa admin mengatur ulang filter manual.
-it('redirects to the index filtered by the saved kelas own prodi and semester after a successful save, not the backUrl', function () {
+// (filter dari sebelum form dibuka) — diarahkan ke filter prodi, semester, DAN angkatan milik
+// kelas yang baru saja disimpan, supaya langsung kelihatan di daftar tanpa admin mengatur ulang
+// filter manual.
+it('redirects to the index filtered by the saved kelas own prodi, semester, and angkatan after a successful save, not the backUrl', function () {
     $admin = adminUser();
     $prodi = Prodi::factory()->create();
     $semester = Semester::factory()->create();
     $kelas = Kelas::factory()->create(['id_prodi' => $prodi->id, 'id_semester' => $semester->id]);
 
-    $expectedRedirect = route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id]);
+    $expectedRedirect = route('admin.akademik.kelas', ['id_prodi' => $prodi->id, 'id_semester' => $semester->id, 'id_angkatan' => $kelas->id_angkatan]);
 
     // Datang dari halaman/filter yang sama sekali berbeda (page 2, search "algoritma") — redirect
-    // setelah simpan tetap harus mengikuti prodi/semester kelas, bukan filter asal ini.
+    // setelah simpan tetap harus mengikuti prodi/semester/angkatan kelas, bukan filter asal ini.
     Livewire::withQueryParams(['page' => '2', 'search' => 'algoritma'])
         ->actingAs($admin)
         ->test(Form::class, ['id' => $kelas->id])
