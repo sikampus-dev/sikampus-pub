@@ -52,6 +52,27 @@
         </div>
     @endif
 
+    {{-- Merangkum SELURUH kelas yang cocok filter/pencarian saat ini (lihat
+         Kelas\Index::statistikRingkasan()), bukan cuma baris yang tampil di halaman pagination
+         aktif. --}}
+    <div class="mb-4 rounded-2xl bg-white p-6 shadow-border">
+        <h2 class="mb-4 text-lg font-semibold text-neutral-900">Ringkasan</h2>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="rounded-lg bg-neutral-50 p-4 shadow-border">
+                <span class="text-xs font-medium text-neutral-500">Jumlah Mata Kuliah</span>
+                <p class="text-2xl font-bold text-neutral-900">{{ $statistik['jumlah_mata_kuliah'] }}</p>
+            </div>
+            <div class="rounded-lg bg-neutral-50 p-4 shadow-border">
+                <span class="text-xs font-medium text-neutral-500">Total SKS</span>
+                <p class="text-2xl font-bold text-neutral-900">{{ $statistik['total_sks'] }}</p>
+            </div>
+            <div class="rounded-lg bg-neutral-50 p-4 shadow-border">
+                <span class="text-xs font-medium text-neutral-500">Total Mahasiswa</span>
+                <p class="text-2xl font-bold text-neutral-900">{{ $statistik['total_mahasiswa'] }}</p>
+            </div>
+        </div>
+    </div>
+
     <div class="rounded-2xl bg-white shadow-border">
         <div class="flex flex-wrap items-center gap-3 border-b border-neutral-200 p-4">
             <div class="relative flex-1 min-w-[220px]">

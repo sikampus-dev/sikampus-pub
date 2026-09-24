@@ -342,6 +342,88 @@ it('shows the jumlah mahasiswa column counting only krs rows with an active (app
     expect($kelasList->firstWhere('id', $kelas->id)->jumlah_mahasiswa)->toBe(2);
 });
 
+it('shows a ringkasan widget summarizing jumlah mata kuliah, total sks, and total mahasiswa', function () {
+    $admin = adminUser();
+
+    $matkulA = Matkul::factory()->create(['sks' => 3]);
+    $kelasA = Kelas::factory()->create();
+    $kelasA->kurikulumMatkul()->update(['id_matkul' => $matkulA->id]);
+    Krs::factory()->count(2)->create(['id_kelas' => $kelasA->id, 'approved_at' => now()]);
+    // Pending — tidak boleh ikut dihitung ke total mahasiswa.
+    Krs::factory()->create(['id_kelas' => $kelasA->id, 'approved_at' => null]);
+
+    $matkulB = Matkul::factory()->create(['sks' => 4]);
+    $kelasB = Kelas::factory()->create();
+    $kelasB->kurikulumMatkul()->update(['id_matkul' => $matkulB->id]);
+    Krs::factory()->create(['id_kelas' => $kelasB->id, 'approved_at' => now()]);
+
+    $statistik = Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->viewData('statistik');
+
+    expect($statistik['jumlah_mata_kuliah'])->toBe(2)
+        ->and($statistik['total_sks'])->toBe(7)
+        ->and($statistik['total_mahasiswa'])->toBe(3);
+});
+
+it('counts kelas paralel dari mata kuliah yang sama sebagai baris terpisah di ringkasan, bukan distinct', function () {
+    $admin = adminUser();
+
+    $matkul = Matkul::factory()->create(['sks' => 3]);
+    $kelasParalelA = Kelas::factory()->create();
+    $kelasParalelA->kurikulumMatkul()->update(['id_matkul' => $matkul->id]);
+    $kelasParalelB = Kelas::factory()->create();
+    $kelasParalelB->kurikulumMatkul()->update(['id_matkul' => $matkul->id]);
+
+    $statistik = Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->viewData('statistik');
+
+    expect($statistik['jumlah_mata_kuliah'])->toBe(2)
+        ->and($statistik['total_sks'])->toBe(6);
+});
+
+it('summarizes the whole filtered result in the ringkasan widget, not just the current pagination page', function () {
+    $admin = adminUser();
+    $prodi = Prodi::factory()->create();
+    $matkul = Matkul::factory()->create(['sks' => 2]);
+    // id_kurikulum_matkul dan id_prodi dibagi ke semua 15 baris (bukan lewat Kelas::factory()
+    // default): tiap Kelas::factory() baru menyeret KurikulumMatkul -> Kurikulum -> Prodi ->
+    // Jenjang baru, dan JenjangFactory cuma punya 26 kemungkinan kode unik ("S?") — kalau
+    // dipanggil 15x di sini plus test lain di file yang sama, koleksi unique fakernya jebol.
+    $kurikulumMatkul = KurikulumMatkul::factory()->create(['id_matkul' => $matkul->id]);
+    Kelas::factory()->count(15)->create([
+        'id_prodi' => $prodi->id,
+        'id_kurikulum_matkul' => $kurikulumMatkul->id,
+    ]);
+
+    $component = Livewire::actingAs($admin)->test(Index::class);
+
+    expect($component->viewData('kelasList')->count())->toBe(10)
+        ->and($component->viewData('statistik')['jumlah_mata_kuliah'])->toBe(15)
+        ->and($component->viewData('statistik')['total_sks'])->toBe(30);
+});
+
+it('excludes kelas outside the current filter from the ringkasan widget', function () {
+    $admin = adminUser();
+    $prodiA = Prodi::factory()->create();
+    $prodiB = Prodi::factory()->create();
+    $matkulA = Matkul::factory()->create(['sks' => 3]);
+    $matkulB = Matkul::factory()->create(['sks' => 5]);
+    $kelasA = Kelas::factory()->create(['id_prodi' => $prodiA->id]);
+    $kelasA->kurikulumMatkul()->update(['id_matkul' => $matkulA->id]);
+    $kelasB = Kelas::factory()->create(['id_prodi' => $prodiB->id]);
+    $kelasB->kurikulumMatkul()->update(['id_matkul' => $matkulB->id]);
+
+    $statistik = Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('filterProdi', (string) $prodiA->id)
+        ->viewData('statistik');
+
+    expect($statistik['jumlah_mata_kuliah'])->toBe(1)
+        ->and($statistik['total_sks'])->toBe(3);
+});
+
 it('rejects a duplicate kombinasi kurikulum matkul, semester, dan angkatan', function () {
     $admin = adminUser();
     $prodi = Prodi::factory()->create();

@@ -8,6 +8,7 @@ use App\Models\Kehadiran;
 use App\Models\Kelas;
 use App\Models\KelasDosen;
 use App\Models\KelompokKelas;
+use App\Models\Krs;
 use App\Models\MateriPerkuliahan;
 use App\Models\Perkuliahan;
 use App\Models\Prodi;
@@ -20,6 +21,7 @@ use App\Models\Semester;
 use App\Models\Tugas;
 use App\Models\TugasMahasiswa;
 use App\Models\Ujian;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -433,49 +435,29 @@ class Index extends Component
     }
 
     /**
-     * Sama persis dengan KelasController::index, plus withTrashed() opsional lewat $showTrashed
-     * (tidak ada padanan di API — lihat catatan pada restore()).
+     * Kelas yang cocok dengan filter/pencarian yang sedang aktif, TANPA eager load atau
+     * withCount — dipakai untuk membangun baik daftar berpaginasi (render()) maupun widget
+     * statistik ringkasan (statistikRingkasan()), supaya keduanya selalu menyaring baris yang
+     * persis sama tanpa menduplikasi tiap kondisi filter dua kali. $prodiId di sini SUDAH
+     * melalui koreksi scope (lihat render()), bukan filterProdi mentah.
+     *
+     * Kolom langsung (id_prodi/id_semester/dst) sengaja dikualifikasi "kelas." — tanpa itu,
+     * statistikRingkasan() yang men-join kurikulum_matkul+matkul (tabel matkul juga punya kolom
+     * id_prodi) akan gagal dengan "Column 'id_prodi' in where clause is ambiguous".
      */
-    public function render()
+    private function filteredKelasQuery(?int $prodiId): Builder
     {
-        $query = Kelas::with([
-            'kurikulumMatkul.matkul',
-            'kurikulumMatkul.kurikulum',
-            'prodi.jenjang',
-            'semester',
-            'angkatan',
-            'dosenPic',
-            'kelompokKelas',
-        ])
-            // Kolom "Jumlah Pertemuan" di tabel dihitung dari baris Jadwal yang benar-benar ada
-            // (jadwal_count), BUKAN dari kelas.jml_pertemuan — kolom itu cuma target/rencana yang
-            // diisi manual saat kelas dibuat, bisa berbeda dari jumlah slot jadwal yang sungguhan
-            // terbentuk (mis. sebagian belum dibuat, atau dibuat lebih lewat import terpisah).
-            ->withCount('jadwal')
-            // Kolom "Jumlah Mahasiswa" dihitung dari KRS berstatus aktif (approved_at terisi) saja
-            // — sama seperti badge "Aktif" di Krs\Show. KRS yang masih pending atau sudah
-            // soft-deleted (dikecualikan otomatis oleh global scope SoftDeletes pada Krs) tidak
-            // ikut dihitung. Tidak perlu distinct id_mahasiswa: krs_unique (id_mahasiswa +
-            // id_kelas) membuat satu mahasiswa mustahil punya lebih dari satu baris KRS aktif
-            // untuk kelas yang sama.
-            ->withCount(['krs as jumlah_mahasiswa' => function ($q) {
-                $q->whereNotNull('approved_at');
-            }]);
+        $query = Kelas::query();
 
         if ($this->showTrashed) {
             $query->withTrashed();
         }
 
         $user = Auth::user();
-        $prodiId = $this->filterProdi !== '' ? (int) $this->filterProdi : null;
-
         if ($user && $user->hasScopeRestriction()) {
             $allowedProdiIds = $user->getAllowedProdiIds();
             if ($allowedProdiIds !== null) {
-                $query->whereIn('id_prodi', $allowedProdiIds);
-                if ($prodiId && ! in_array($prodiId, $allowedProdiIds, true)) {
-                    $prodiId = null;
-                }
+                $query->whereIn('kelas.id_prodi', $allowedProdiIds);
             }
         }
 
@@ -497,23 +479,103 @@ class Index extends Component
         }
 
         if ($prodiId) {
-            $query->where('id_prodi', $prodiId);
+            $query->where('kelas.id_prodi', $prodiId);
         }
 
         if ($this->filterSemester !== '') {
-            $query->where('id_semester', (int) $this->filterSemester);
+            $query->where('kelas.id_semester', (int) $this->filterSemester);
         }
 
         if ($this->filterKelompokKelas !== '') {
-            $query->where('id_kelompok_kelas', (int) $this->filterKelompokKelas);
+            $query->where('kelas.id_kelompok_kelas', (int) $this->filterKelompokKelas);
         }
 
         if ($this->filterAngkatan !== '') {
-            $query->where('id_angkatan', (int) $this->filterAngkatan);
+            $query->where('kelas.id_angkatan', (int) $this->filterAngkatan);
         }
+
+        return $query;
+    }
+
+    /**
+     * Widget ringkasan di atas tabel — merangkum SELURUH kelas yang cocok filter/pencarian saat
+     * ini, bukan cuma baris yang tampil di halaman pagination aktif (sama seperti pola
+     * Krs\Show::summary()/Nilai\Show::statistik()). "Jumlah mata kuliah" dihitung per baris
+     * kelas (kelas paralel dari mata kuliah yang sama dihitung beberapa kali), BUKAN distinct —
+     * konsisten dengan "Jumlah Mata Kuliah" di Nilai\Index yang juga menghitung baris KRS apa
+     * adanya. "Total mahasiswa" memakai definisi "aktif" yang sama dengan kolom Jumlah
+     * Mahasiswa per baris (approved_at terisi, KRS yang sudah soft-deleted otomatis
+     * dikecualikan).
+     *
+     * @return array{jumlah_mata_kuliah: int, total_sks: int, total_mahasiswa: int}
+     */
+    private function statistikRingkasan(?int $prodiId): array
+    {
+        $statsQuery = $this->filteredKelasQuery($prodiId);
+
+        $jumlahMataKuliah = (clone $statsQuery)->count();
+
+        $totalSks = (int) (clone $statsQuery)
+            ->join('kurikulum_matkul', 'kelas.id_kurikulum_matkul', '=', 'kurikulum_matkul.id')
+            ->join('matkul', 'kurikulum_matkul.id_matkul', '=', 'matkul.id')
+            ->sum('matkul.sks');
+
+        $totalMahasiswa = Krs::whereNotNull('approved_at')
+            ->whereIn('id_kelas', (clone $statsQuery)->select('kelas.id'))
+            ->count();
+
+        return [
+            'jumlah_mata_kuliah' => $jumlahMataKuliah,
+            'total_sks' => $totalSks,
+            'total_mahasiswa' => $totalMahasiswa,
+        ];
+    }
+
+    /**
+     * Sama persis dengan KelasController::index, plus withTrashed() opsional lewat $showTrashed
+     * (tidak ada padanan di API — lihat catatan pada restore()).
+     */
+    public function render()
+    {
+        $user = Auth::user();
+        $prodiId = $this->filterProdi !== '' ? (int) $this->filterProdi : null;
+
+        if ($user && $user->hasScopeRestriction()) {
+            $allowedProdiIds = $user->getAllowedProdiIds();
+            if ($allowedProdiIds !== null && $prodiId && ! in_array($prodiId, $allowedProdiIds, true)) {
+                $prodiId = null;
+            }
+        }
+
+        $query = $this->filteredKelasQuery($prodiId)
+            ->with([
+                'kurikulumMatkul.matkul',
+                'kurikulumMatkul.kurikulum',
+                'prodi.jenjang',
+                'semester',
+                'angkatan',
+                'dosenPic',
+                'kelompokKelas',
+            ])
+            // Kolom "Jumlah Pertemuan" di tabel dihitung dari baris Jadwal yang benar-benar ada
+            // (jadwal_count), BUKAN dari kelas.jml_pertemuan — kolom itu cuma target/rencana yang
+            // diisi manual saat kelas dibuat, bisa berbeda dari jumlah slot jadwal yang sungguhan
+            // terbentuk (mis. sebagian belum dibuat, atau dibuat lebih lewat import terpisah).
+            ->withCount('jadwal')
+            // Kolom "Jumlah Mahasiswa" dihitung dari KRS berstatus aktif (approved_at terisi) saja
+            // — sama seperti badge "Aktif" di Krs\Show. KRS yang masih pending atau sudah
+            // soft-deleted (dikecualikan otomatis oleh global scope SoftDeletes pada Krs) tidak
+            // ikut dihitung. Tidak perlu distinct id_mahasiswa: krs_unique (id_mahasiswa +
+            // id_kelas) membuat satu mahasiswa mustahil punya lebih dari satu baris KRS aktif
+            // untuk kelas yang sama.
+            ->withCount(['krs as jumlah_mahasiswa' => function ($q) {
+                $q->whereNotNull('approved_at');
+            }]);
 
         $kelasList = $query->orderBy('id')->paginate($this->perPage);
         $this->applySemesterKuliahKeToCollection($kelasList->getCollection(), $this->semesterIdToIndexMap());
+
+        $statistik = $this->statistikRingkasan($prodiId);
 
         $prodiQuery = Prodi::with('jenjang')->whereNull('deleted_at');
         if ($user && $user->hasScopeRestriction()) {
@@ -544,6 +606,7 @@ class Index extends Component
         // ->extends() (bukan #[Layout] attribute) — lihat catatan di App\Livewire\Admin\Fakultas\Index::render()
         return view('livewire.admin.kelas.index', [
             'kelasList' => $kelasList,
+            'statistik' => $statistik,
             'prodiOptions' => $prodiQuery->orderBy('nama')->get()->map(fn (Prodi $p) => (object) [
                 'id' => $p->id,
                 'label' => $p->jenjang?->kode ? "{$p->nama} ({$p->jenjang->kode})" : $p->nama,
