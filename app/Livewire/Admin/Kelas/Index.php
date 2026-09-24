@@ -64,6 +64,13 @@ class Index extends Component
     #[Url(as: 'id_kelompok_kelas')]
     public string $filterKelompokKelas = '';
 
+    // Tidak ada padanan di KelasController::index — API belum punya filter ini, murni fitur
+    // panel. Angkatan disimpan sebagai baris Semester juga (Kelas::angkatan() -> belongsTo
+    // Semester, lihat id_angkatan), jadi dropdown-nya memakai $semesterOptions yang sama dengan
+    // filter Semester, bukan master data terpisah.
+    #[Url(as: 'id_angkatan')]
+    public string $filterAngkatan = '';
+
     // Baris yang sudah soft-deleted disembunyikan secara default — dinyalakan lewat toggle supaya
     // admin bisa menemukan lalu memulihkan kelas yang kombinasi kelompok+kurikulum_matkul+
     // semester+angkatan-nya "terkunci" oleh baris terhapus (unique index kelas_unique tidak
@@ -111,6 +118,11 @@ class Index extends Component
     }
 
     public function updatingFilterKelompokKelas(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingFilterAngkatan(): void
     {
         $this->resetPage();
     }
@@ -496,6 +508,10 @@ class Index extends Component
             $query->where('id_kelompok_kelas', (int) $this->filterKelompokKelas);
         }
 
+        if ($this->filterAngkatan !== '') {
+            $query->where('id_angkatan', (int) $this->filterAngkatan);
+        }
+
         $kelasList = $query->orderBy('id')->paginate($this->perPage);
         $this->applySemesterKuliahKeToCollection($kelasList->getCollection(), $this->semesterIdToIndexMap());
 
@@ -521,6 +537,7 @@ class Index extends Component
             'id_prodi' => $this->filterProdi !== '' ? $this->filterProdi : null,
             'id_semester' => $this->filterSemester !== '' ? $this->filterSemester : null,
             'id_kelompok_kelas' => $this->filterKelompokKelas !== '' ? $this->filterKelompokKelas : null,
+            'id_angkatan' => $this->filterAngkatan !== '' ? $this->filterAngkatan : null,
             'page' => $kelasList->currentPage() > 1 ? $kelasList->currentPage() : null,
         ], fn ($value) => $value !== null);
 

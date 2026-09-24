@@ -764,6 +764,26 @@ it('displays semester filter options as name with the code in parentheses', func
         ->assertSee('2025 Ganjil (20251)');
 });
 
+it('filters kelas by angkatan', function () {
+    $admin = adminUser();
+    $angkatanA = Semester::factory()->create(['nama' => '2023 Ganjil', 'kode' => '20231']);
+    $angkatanB = Semester::factory()->create(['nama' => '2024 Ganjil', 'kode' => '20241']);
+    $matkulA = Matkul::factory()->create(['nama' => 'Kelas Angkatan A']);
+    $matkulB = Matkul::factory()->create(['nama' => 'Kelas Angkatan B']);
+    Kelas::factory()->create(['id_angkatan' => $angkatanA->id])
+        ->kurikulumMatkul()->update(['id_matkul' => $matkulA->id]);
+    Kelas::factory()->create(['id_angkatan' => $angkatanB->id])
+        ->kurikulumMatkul()->update(['id_matkul' => $matkulB->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->assertSee('Kelas Angkatan A')
+        ->assertSee('Kelas Angkatan B')
+        ->set('filterAngkatan', (string) $angkatanA->id)
+        ->assertSee('Kelas Angkatan A')
+        ->assertDontSee('Kelas Angkatan B');
+});
+
 it('admin dengan scope prodi hanya melihat kelas miliknya', function () {
     $prodiA = Prodi::factory()->create();
     $prodiB = Prodi::factory()->create();
@@ -858,6 +878,18 @@ it('carries the current page/filter state from index into the Lihat and Ubah lin
         ->set('perPage', 10)
         ->call('gotoPage', 2)
         ->assertSee($expectedQuery);
+});
+
+it('carries the angkatan filter into the Lihat and Ubah links', function () {
+    $admin = adminUser();
+    $angkatan = Semester::factory()->create();
+    Kelas::factory()->create(['id_angkatan' => $angkatan->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->set('filterSemester', '')
+        ->set('filterAngkatan', (string) $angkatan->id)
+        ->assertSee('id_angkatan='.$angkatan->id);
 });
 
 it('points the Kembali button on the detail page to the page/filter state carried in the query string', function () {

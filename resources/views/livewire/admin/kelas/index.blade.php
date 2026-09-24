@@ -82,6 +82,18 @@
                 />
             </div>
             <div class="w-56">
+                {{-- Angkatan disimpan sebagai baris Semester juga (Kelas::angkatan() -> belongsTo
+                     Semester), jadi opsinya memakai $semesterOptions yang sama dengan filter
+                     Semester di atas, bukan master data terpisah. --}}
+                <x-searchable-select
+                    model="filterAngkatan"
+                    :live="true"
+                    :options="$semesterOptions"
+                    optionLabel="label"
+                    placeholder="Semua angkatan"
+                />
+            </div>
+            <div class="w-56">
                 {{-- wire:key terikat filterProdi: x-searchable-select memakai wire:ignore, jadi
                      kalau prodi berganti elemen ini harus benar-benar diganti (bukan di-patch)
                      supaya opsi kelas mahasiswa yang baru (hasil filter prodi) ikut termuat. --}}
