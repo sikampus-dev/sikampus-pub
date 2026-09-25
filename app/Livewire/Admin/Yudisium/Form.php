@@ -58,7 +58,7 @@ class Form extends Component
             return null;
         }
 
-        return Mahasiswa::with(['prodi', 'semester_masuk', 'status_akademik', 'grup_mahasiswa'])
+        return Mahasiswa::with(['prodi', 'semester_masuk', 'status_akademik', 'kelompok_kelas'])
             ->find($this->selectedMahasiswaId);
     }
 

@@ -4,6 +4,7 @@ use App\Livewire\Mahasiswa\Dashboard;
 use App\Models\Dosen;
 use App\Models\DosenWali;
 use App\Models\Kelas;
+use App\Models\KelompokKelas;
 use App\Models\Krs;
 use App\Models\Ktm;
 use App\Models\KurikulumMatkul;
@@ -162,4 +163,15 @@ it('orders the ip per semester chart by kode, oldest first, regardless of semest
     $chart = Livewire::actingAs($user)->test(Dashboard::class)->instance()->ipPerSemester();
 
     expect(array_map(fn ($row) => $row['semester']->kode, $chart))->toBe(['20232', '20241', '20252']);
+});
+
+it('shows the kelompok kelas from kelompok_kelas, not the unused grup_mahasiswa table', function () {
+    // Regresi: dashboard dulu membaca relasi grup_mahasiswa. Tabel itu sudah tidak dipakai (kosong,
+    // tak ada mahasiswa yang punya id_grup_mahasiswa), jadi "Kelompok Kelas" selalu tampil "-".
+    $kelompok = KelompokKelas::factory()->create(['nama' => 'Kelas Reguler Pagi A']);
+    [$user] = dashboardMahasiswaUser(['id_kelompok_kelas' => $kelompok->id]);
+
+    $this->actingAs($user)->get(route('mahasiswa.dashboard'))
+        ->assertOk()
+        ->assertSee('Kelas Reguler Pagi A');
 });

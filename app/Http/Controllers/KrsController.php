@@ -49,6 +49,7 @@ class KrsController extends Controller
         ?int $prodiId,
         mixed $semesterMasukId,
         mixed $grupMahasiswaId,
+        mixed $kelompokKelasId,
         ?array $allowedProdiIds
     ): Builder {
         $q = Mahasiswa::query()
@@ -96,6 +97,12 @@ class KrsController extends Controller
             $q->where('mahasiswa.id_grup_mahasiswa', $grupMahasiswaId);
         }
 
+        // Kelompok kelas aktif ada di mahasiswa.id_kelompok_kelas. Filter id_grup_mahasiswa di
+        // atas dipertahankan demi kompatibilitas, tapi tabel grup_mahasiswa sudah tidak dipakai.
+        if ($kelompokKelasId) {
+            $q->where('mahasiswa.id_kelompok_kelas', $kelompokKelasId);
+        }
+
         return $q;
     }
 
@@ -131,6 +138,7 @@ class KrsController extends Controller
         $semesterMasukId = $request->get('id_semester_masuk');
         $semesterId = $request->get('id_semester') ? (int) $request->get('id_semester') : null;
         $grupMahasiswaId = $request->get('id_grup_mahasiswa');
+        $kelompokKelasId = $request->get('id_kelompok_kelas');
         $rawStatus = $request->get('status_pengajuan');
         $statusPengajuan = in_array($rawStatus, ['belum_mengajukan', 'ada_belum_acc', 'sudah_acc_semua'], true)
             ? $rawStatus
@@ -158,6 +166,7 @@ class KrsController extends Controller
                 $prodiId,
                 $semesterMasukId,
                 $grupMahasiswaId,
+                $kelompokKelasId,
                 $allowedProdiIds
             );
 
@@ -274,6 +283,10 @@ class KrsController extends Controller
             $query->where('mahasiswa.id_grup_mahasiswa', $grupMahasiswaId);
         }
 
+        if ($kelompokKelasId) {
+            $query->where('mahasiswa.id_kelompok_kelas', $kelompokKelasId);
+        }
+
         if ($statusPengajuan === 'ada_belum_acc') {
             $query->havingRaw('SUM(CASE WHEN krs.approved_at IS NULL THEN 1 ELSE 0 END) > 0');
         } elseif ($statusPengajuan === 'sudah_acc_semua') {
@@ -352,7 +365,7 @@ class KrsController extends Controller
 
     /**
      * Daftar KRS mahasiswa untuk admin prodi (hanya mahasiswa di scope prodi user).
-     * Query: id_semester (periode), id_semester_masuk (angkatan), id_grup_mahasiswa, search, per_page, page.
+     * Query: id_semester (periode), id_semester_masuk (angkatan), id_grup_mahasiswa, id_kelompok_kelas, search, per_page, page.
      */
     public function indexProdi(Request $request): JsonResponse
     {
@@ -379,6 +392,7 @@ class KrsController extends Controller
             $semesterIdInt = null;
         }
         $grupMahasiswaId = $request->get('id_grup_mahasiswa');
+        $kelompokKelasId = $request->get('id_kelompok_kelas');
         $rawStatus = $request->get('status_pengajuan');
         $statusPengajuan = in_array($rawStatus, ['belum_mengajukan', 'ada_belum_acc', 'sudah_acc_semua'], true)
             ? $rawStatus
@@ -397,6 +411,7 @@ class KrsController extends Controller
                 null,
                 $semesterMasukId,
                 $grupMahasiswaId,
+                $kelompokKelasId,
                 $allowedProdiIds
             );
 
@@ -498,6 +513,10 @@ class KrsController extends Controller
 
         if ($grupMahasiswaId) {
             $query->where('mahasiswa.id_grup_mahasiswa', $grupMahasiswaId);
+        }
+
+        if ($kelompokKelasId) {
+            $query->where('mahasiswa.id_kelompok_kelas', $kelompokKelasId);
         }
 
         if ($statusPengajuan === 'ada_belum_acc') {

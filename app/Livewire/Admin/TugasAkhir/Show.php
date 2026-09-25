@@ -85,7 +85,7 @@ class Show extends Component
             'mahasiswa.prodi',
             'mahasiswa.semester_masuk',
             'mahasiswa.status_akademik',
-            'mahasiswa.grup_mahasiswa',
+            'mahasiswa.kelompok_kelas',
             'semester',
             'pembimbing.dosen',
             'ujianSidang.semester',

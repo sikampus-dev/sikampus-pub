@@ -105,7 +105,7 @@
                 </div>
                 <div class="flex justify-between text-sm">
                     <span class="text-neutral-500">Kelompok Kelas:</span>
-                    <span class="font-semibold text-neutral-900">{{ $mhs->grup_mahasiswa?->nama ?: '-' }}</span>
+                    <span class="font-semibold text-neutral-900">{{ $mhs->kelompok_kelas?->nama ?: '-' }}</span>
                 </div>
                 <div class="flex justify-between text-sm">
                     <span class="text-neutral-500">Dosen Wali:</span>

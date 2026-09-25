@@ -191,6 +191,7 @@ class AuthController extends Controller
                 'prodi.fakultas',
                 'semester_masuk',
                 'grup_mahasiswa',
+                'kelompok_kelas',
                 'dosen_wali' => function ($q) {
                     $q->where('status', 'active')->with('dosen');
                 },
@@ -212,6 +213,11 @@ class AuthController extends Controller
                     'status_akademik_nama' => $mahasiswa->status_akademik?->nama,
                     'angkatan' => $mahasiswa->semester_masuk?->nama,
                     'grup_mahasiswa_nama' => $mahasiswa->grup_mahasiswa?->nama,
+                    // Kelompok kelas aktif ada di tabel kelompok_kelas (mahasiswa.id_kelompok_kelas).
+                    // grup_mahasiswa di atas sudah tidak dipakai — tabelnya kosong dan tak ada
+                    // mahasiswa yang punya id_grup_mahasiswa — jadi nilainya selalu null. Frontend
+                    // (app/mahasiswa/page.tsx) memang membaca kelompok_kelas_nama, bukan field itu.
+                    'kelompok_kelas_nama' => $mahasiswa->kelompok_kelas?->nama,
                 ];
             }
         }

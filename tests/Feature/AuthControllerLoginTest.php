@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\KelompokKelas;
+use App\Models\Mahasiswa;
 use App\Models\User;
 
 it('logs a user in and issues a token', function () {
@@ -65,4 +67,18 @@ it('allows a user with status active to log in as before', function () {
         'login' => $dosen->email,
         'password' => 'password',
     ])->assertOk();
+});
+
+it('returns the kelompok kelas name for a mahasiswa in auth/me, read from kelompok_kelas', function () {
+    // Regresi: me() dulu hanya mengirim grup_mahasiswa_nama dari tabel grup_mahasiswa yang sudah
+    // tidak dipakai (kosong), sementara frontend membaca kelompok_kelas_nama — akibatnya
+    // "Kelompok Kelas" di dashboard mahasiswa selalu tampil kosong.
+    $kelompok = KelompokKelas::factory()->create(['nama' => 'Kelas Reguler Pagi A']);
+    $user = User::factory()->create(['role' => 'mahasiswa']);
+    Mahasiswa::factory()->create(['id_user' => $user->id, 'id_kelompok_kelas' => $kelompok->id]);
+
+    $this->actingAs($user, 'sanctum')
+        ->getJson('/api/auth/me')
+        ->assertOk()
+        ->assertJsonPath('mahasiswa.kelompok_kelas_nama', 'Kelas Reguler Pagi A');
 });

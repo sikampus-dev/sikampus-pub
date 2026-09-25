@@ -25,12 +25,12 @@
                     />
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs font-semibold text-neutral-700">Grup Mahasiswa</label>
+                    <label class="mb-1 block text-xs font-semibold text-neutral-700">Kelompok Kelas</label>
                     <x-searchable-select
-                        model="filterGrup"
+                        model="filterKelompokKelas"
                         :live="true"
-                        :options="$this->grupOptions"
-                        placeholder="Semua grup"
+                        :options="$this->kelompokKelasOptions"
+                        placeholder="Semua kelompok kelas"
                     />
                 </div>
             </div>

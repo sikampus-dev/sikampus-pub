@@ -5,6 +5,7 @@ use App\Models\Dosen;
 use App\Models\DosenWali;
 use App\Models\GrupMahasiswa;
 use App\Models\Kelas;
+use App\Models\KelompokKelas;
 use App\Models\Krs;
 use App\Models\KurikulumMatkul;
 use App\Models\Mahasiswa;
@@ -62,17 +63,17 @@ it('shows aggregated sks and dosen wali for a mahasiswa row', function () {
     expect($row['total_kelas'])->toBe(2);
 });
 
-it('filters by periode semester, angkatan, and grup mahasiswa', function () {
+it('filters by periode semester, angkatan, and kelompok kelas', function () {
     $prodi = Prodi::factory()->create();
     $semesterA = Semester::factory()->create();
     $semesterB = Semester::factory()->create();
     $angkatanA = Semester::factory()->create();
     $angkatanB = Semester::factory()->create();
-    $grupA = GrupMahasiswa::create(['nama' => 'Grup A', 'kode' => 'GA', 'angkatan' => 2024, 'status' => 'active']);
-    $grupB = GrupMahasiswa::create(['nama' => 'Grup B', 'kode' => 'GB', 'angkatan' => 2024, 'status' => 'active']);
+    $kelompokA = KelompokKelas::factory()->create(['nama' => 'Kelompok A']);
+    $kelompokB = KelompokKelas::factory()->create(['nama' => 'Kelompok B']);
 
-    $mhsA = Mahasiswa::factory()->create(['id_prodi' => $prodi->id, 'nama' => 'Mahasiswa Satu', 'id_semester_masuk' => $angkatanA->id, 'id_grup_mahasiswa' => $grupA->id]);
-    $mhsB = Mahasiswa::factory()->create(['id_prodi' => $prodi->id, 'nama' => 'Mahasiswa Dua', 'id_semester_masuk' => $angkatanB->id, 'id_grup_mahasiswa' => $grupB->id]);
+    $mhsA = Mahasiswa::factory()->create(['id_prodi' => $prodi->id, 'nama' => 'Mahasiswa Satu', 'id_semester_masuk' => $angkatanA->id, 'id_kelompok_kelas' => $kelompokA->id]);
+    $mhsB = Mahasiswa::factory()->create(['id_prodi' => $prodi->id, 'nama' => 'Mahasiswa Dua', 'id_semester_masuk' => $angkatanB->id, 'id_kelompok_kelas' => $kelompokB->id]);
 
     $matkul = Matkul::factory()->create(['id_prodi' => $prodi->id, 'sks' => 3]);
     $kmA = KurikulumMatkul::factory()->create(['id_matkul' => $matkul->id, 'sks' => 3]);
@@ -97,7 +98,7 @@ it('filters by periode semester, angkatan, and grup mahasiswa', function () {
 
     $component
         ->set('filterAngkatan', '')
-        ->set('filterGrup', (string) $grupA->id)
+        ->set('filterKelompokKelas', (string) $kelompokA->id)
         ->assertSee('Mahasiswa Satu')
         ->assertDontSee('Mahasiswa Dua');
 });
@@ -189,4 +190,31 @@ it('orders the detail modal semester groups by kode, newest first', function () 
         ->detailKrsBySemester();
 
     expect(array_column(array_column($groups, 'semester'), 'kode'))->toBe(['20252', '20241', '20232']);
+});
+
+it('filters the prodi krs api by id_kelompok_kelas while keeping the legacy id_grup_mahasiswa param working', function () {
+    $prodi = Prodi::factory()->create();
+    $kelompokA = KelompokKelas::factory()->create(['nama' => 'Kelompok A']);
+    $kelompokB = KelompokKelas::factory()->create(['nama' => 'Kelompok B']);
+    // grup_mahasiswa sudah tidak dipakai, tapi parameter lamanya harus tetap diterima supaya
+    // konsumen API yang masih mengirimnya tidak rusak.
+    $grupLama = GrupMahasiswa::create(['nama' => 'Grup Lama', 'kode' => 'GL', 'angkatan' => 2024, 'status' => 'active']);
+
+    $mhsA = Mahasiswa::factory()->create(['id_prodi' => $prodi->id, 'nama' => 'Mahasiswa Kelompok A', 'id_kelompok_kelas' => $kelompokA->id]);
+    $mhsB = Mahasiswa::factory()->create(['id_prodi' => $prodi->id, 'nama' => 'Mahasiswa Kelompok B', 'id_kelompok_kelas' => $kelompokB->id, 'id_grup_mahasiswa' => $grupLama->id]);
+
+    $matkul = Matkul::factory()->create(['id_prodi' => $prodi->id, 'sks' => 3]);
+    $km = KurikulumMatkul::factory()->create(['id_matkul' => $matkul->id, 'sks' => 3]);
+    $kelas = Kelas::factory()->create(['id_prodi' => $prodi->id, 'id_kurikulum_matkul' => $km->id]);
+    Krs::factory()->create(['id_mahasiswa' => $mhsA->id, 'id_kelas' => $kelas->id]);
+    Krs::factory()->create(['id_mahasiswa' => $mhsB->id, 'id_kelas' => $kelas->id]);
+    $kaprodi = kaprodiUser($prodi);
+
+    $namaDari = fn ($response) => collect($response->json('data'))->pluck('nama')->all();
+
+    $baru = $this->actingAs($kaprodi, 'sanctum')->getJson('/api/prodi/krs?id_kelompok_kelas='.$kelompokA->id)->assertOk();
+    expect($namaDari($baru))->toBe(['Mahasiswa Kelompok A']);
+
+    $lama = $this->actingAs($kaprodi, 'sanctum')->getJson('/api/prodi/krs?id_grup_mahasiswa='.$grupLama->id)->assertOk();
+    expect($namaDari($lama))->toBe(['Mahasiswa Kelompok B']);
 });

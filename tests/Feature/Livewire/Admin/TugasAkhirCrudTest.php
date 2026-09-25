@@ -6,6 +6,7 @@ use App\Livewire\Admin\TugasAkhir\UjianSidangShow;
 use App\Models\Dosen;
 use App\Models\JenisMatkul;
 use App\Models\Kelas;
+use App\Models\KelompokKelas;
 use App\Models\Krs;
 use App\Models\KurikulumMatkul;
 use App\Models\Mahasiswa;
@@ -255,4 +256,17 @@ it('redirects unauthenticated users to the login page', function () {
 
     $this->get(route('admin.akademik.tugas-akhir'))->assertRedirect(route('login'));
     $this->get(route('admin.akademik.tugas-akhir.show', $ta->id))->assertRedirect(route('login'));
+});
+
+it('shows the mahasiswa kelompok kelas on the show page, read from kelompok_kelas', function () {
+    // Regresi: halaman ini dulu membaca relasi grup_mahasiswa. Tabel itu sudah tidak dipakai
+    // (kosong, tak ada mahasiswa yang punya id_grup_mahasiswa), jadi kolomnya selalu tampil "—".
+    $admin = adminUser();
+    $kelompok = KelompokKelas::factory()->create(['nama' => 'Kelas Reguler Sore B']);
+    $ta = buatTugasAkhir(['mahasiswa' => Mahasiswa::factory()->create(['id_kelompok_kelas' => $kelompok->id])]);
+
+    $this->actingAs($admin)->get(route('admin.akademik.tugas-akhir.show', $ta->id))
+        ->assertOk()
+        ->assertSee('Kelompok Kelas')
+        ->assertSee('Kelas Reguler Sore B');
 });

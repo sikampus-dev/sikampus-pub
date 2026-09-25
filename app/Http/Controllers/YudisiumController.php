@@ -230,6 +230,7 @@ class YudisiumController extends Controller
             'mahasiswa.semester_masuk',
             'mahasiswa.status_akademik',
             'mahasiswa.grup_mahasiswa',
+            'mahasiswa.kelompok_kelas',
             'jenis_keluar',
         ]);
 
@@ -291,6 +292,7 @@ class YudisiumController extends Controller
                 'mahasiswa.semester_masuk',
                 'mahasiswa.status_akademik',
                 'mahasiswa.grup_mahasiswa',
+                'mahasiswa.kelompok_kelas',
                 'jenis_keluar',
             ]);
 

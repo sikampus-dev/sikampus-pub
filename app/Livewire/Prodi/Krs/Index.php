@@ -2,7 +2,7 @@
 
 namespace App\Livewire\Prodi\Krs;
 
-use App\Models\GrupMahasiswa;
+use App\Models\KelompokKelas;
 use App\Models\Krs;
 use App\Models\Mahasiswa;
 use App\Models\Semester;
@@ -29,8 +29,11 @@ class Index extends Component
     #[Url(as: 'id_semester_masuk')]
     public string $filterAngkatan = '';
 
-    #[Url(as: 'id_grup_mahasiswa')]
-    public string $filterGrup = '';
+    // Filter kelompok kelas memakai mahasiswa.id_kelompok_kelas, bukan id_grup_mahasiswa seperti di
+    // app/prodi/krs/page.tsx: tabel grup_mahasiswa sudah tidak dipakai (kosong), jadi dropdown dan
+    // filter grup di sana tidak pernah berfungsi. Pola yang sama dengan Prodi\Mahasiswa\Index.
+    #[Url(as: 'id_kelompok_kelas')]
+    public string $filterKelompokKelas = '';
 
     public int $perPage = 10;
 
@@ -47,7 +50,7 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function updatingFilterGrup(): void
+    public function updatingFilterKelompokKelas(): void
     {
         $this->resetPage();
     }
@@ -179,11 +182,9 @@ class Index extends Component
     }
 
     #[Computed]
-    public function grupOptions(): array
+    public function kelompokKelasOptions()
     {
-        return GrupMahasiswa::orderByDesc('angkatan')->orderBy('nama')->limit(100)->get(['id', 'kode', 'nama'])
-            ->mapWithKeys(fn (GrupMahasiswa $g) => [$g->id => $g->kode ? "{$g->nama} ({$g->kode})" : $g->nama])
-            ->all();
+        return KelompokKelas::orderBy('nama')->limit(100)->get(['id', 'nama']);
     }
 
     /**
@@ -283,8 +284,8 @@ class Index extends Component
             $query->where('kelas.id_semester', (int) $this->filterSemester);
         }
 
-        if ($this->filterGrup !== '') {
-            $query->where('mahasiswa.id_grup_mahasiswa', (int) $this->filterGrup);
+        if ($this->filterKelompokKelas !== '') {
+            $query->where('mahasiswa.id_kelompok_kelas', (int) $this->filterKelompokKelas);
         }
 
         $totalQuery = clone $query;

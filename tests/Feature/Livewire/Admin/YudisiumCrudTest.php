@@ -4,6 +4,7 @@ use App\Livewire\Admin\Yudisium\Form;
 use App\Livewire\Admin\Yudisium\Index;
 use App\Livewire\Admin\Yudisium\Show;
 use App\Models\JenisKeluar;
+use App\Models\KelompokKelas;
 use App\Models\Mahasiswa;
 use App\Models\Prodi;
 use App\Models\Yudisium;
@@ -129,4 +130,23 @@ it('redirects unauthenticated users to the login page', function () {
 
     $this->get(route('admin.akademik.yudisium'))->assertRedirect(route('login'));
     $this->get(route('admin.akademik.yudisium.show', $yudisium->id))->assertRedirect(route('login'));
+});
+
+it('shows the mahasiswa kelompok kelas on the show page and form, read from kelompok_kelas', function () {
+    // Regresi: kedua halaman ini dulu membaca relasi grup_mahasiswa, yang tabelnya sudah tidak
+    // dipakai (kosong), jadi kolom kelompok kelas selalu tampil "—".
+    $admin = adminUser();
+    $kelompok = KelompokKelas::factory()->create(['nama' => 'Kelas Reguler Sore B']);
+    $mahasiswa = Mahasiswa::factory()->create(['id_kelompok_kelas' => $kelompok->id]);
+    $yudisium = Yudisium::factory()->create(['id_mahasiswa' => $mahasiswa->id]);
+
+    $this->actingAs($admin)->get(route('admin.akademik.yudisium.show', $yudisium->id))
+        ->assertOk()
+        ->assertSee('Kelompok Kelas')
+        ->assertSee('Kelas Reguler Sore B');
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->call('selectMahasiswa', $mahasiswa->id)
+        ->assertSee('Kelas Reguler Sore B');
 });

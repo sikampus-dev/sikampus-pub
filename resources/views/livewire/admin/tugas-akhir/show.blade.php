@@ -89,8 +89,8 @@
                         <p class="text-sm font-semibold text-neutral-900">{{ $ta->mahasiswa?->status_akademik?->nama ?? '—' }}</p>
                     </div>
                     <div>
-                        <p class="mb-1 text-xs text-neutral-500">Grup mahasiswa</p>
-                        <p class="text-sm font-semibold text-neutral-900">{{ $ta->mahasiswa?->grup_mahasiswa?->nama ?? '—' }}</p>
+                        <p class="mb-1 text-xs text-neutral-500">Kelompok Kelas</p>
+                        <p class="text-sm font-semibold text-neutral-900">{{ $ta->mahasiswa?->kelompok_kelas?->nama ?? '—' }}</p>
                     </div>
                 </div>
             </div>

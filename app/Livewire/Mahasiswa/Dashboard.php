@@ -35,7 +35,7 @@ class Dashboard extends Component
             'prodi.jenjang',
             'prodi.fakultas',
             'semester_masuk',
-            'grup_mahasiswa',
+            'kelompok_kelas',
             'dosen_wali' => function ($q) {
                 $q->where('status', 'active')->with('dosen');
             },
