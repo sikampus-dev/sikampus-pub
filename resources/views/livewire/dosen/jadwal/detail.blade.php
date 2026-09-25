@@ -1,5 +1,10 @@
-@section('title', 'Detail Jadwal — ' . config('app.name'))
-@section('header_title', 'Detail Jadwal')
+@php
+    $judulPertemuan = $this->jadwal->urutan_pertemuan !== null
+        ? 'Detail Pertemuan ke-'.$this->jadwal->urutan_pertemuan
+        : 'Detail Pertemuan';
+@endphp
+@section('title', $judulPertemuan . ' — ' . config('app.name'))
+@section('header_title', $judulPertemuan)
 
 @section('breadcrumb')
     <div class="flex flex-wrap items-center gap-3 text-sm">

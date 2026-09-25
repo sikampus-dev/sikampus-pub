@@ -92,6 +92,34 @@ it('shows the approved krs count as jumlah mahasiswa on the detail card', functi
     $component->assertSee('Peserta (KRS disetujui)')->assertSee('1');
 });
 
+it('titles the page Detail Pertemuan ke-N using the jadwal urutan_pertemuan', function () {
+    $dosenUser = dosenUser();
+    $dosen = Dosen::where('id_user', $dosenUser->id)->firstOrFail();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id, 'urutan_pertemuan' => 5]);
+    KelasDosen::create(['id_dosen' => $dosen->id, 'id_kelas' => $kelas->id, 'is_pic' => true]);
+
+    $this->actingAs($dosenUser)
+        ->get(route('dosen.jadwal.detail', ['kelasId' => $kelas->id, 'jadwalId' => $jadwal->id]))
+        ->assertOk()
+        ->assertSee('Detail Pertemuan ke-5')
+        ->assertDontSee('Detail Jadwal');
+});
+
+it('drops the ke-N suffix in the title when the jadwal has no urutan_pertemuan', function () {
+    $dosenUser = dosenUser();
+    $dosen = Dosen::where('id_user', $dosenUser->id)->firstOrFail();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id, 'urutan_pertemuan' => null]);
+    KelasDosen::create(['id_dosen' => $dosen->id, 'id_kelas' => $kelas->id, 'is_pic' => true]);
+
+    $this->actingAs($dosenUser)
+        ->get(route('dosen.jadwal.detail', ['kelasId' => $kelas->id, 'jadwalId' => $jadwal->id]))
+        ->assertOk()
+        ->assertSee('Detail Pertemuan')
+        ->assertDontSee('Detail Pertemuan ke-');
+});
+
 it('updates hari, tanggal, ruangan, and jenis kuliah for the pic dosen', function () {
     $dosenUser = dosenUser();
     $dosen = Dosen::where('id_user', $dosenUser->id)->firstOrFail();
