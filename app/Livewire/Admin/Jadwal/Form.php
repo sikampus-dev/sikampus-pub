@@ -338,7 +338,16 @@ class Form extends Component
 
         session()->flash('status', 'Jadwal berhasil disimpan.');
 
-        return redirect($this->backUrl);
+        // Sengaja BUKAN $this->backUrl (filter dari sebelum form dibuka) — filter Index diarahkan
+        // ke prodi, semester, dan kelas milik jadwal yang baru dibuat supaya slot-slotnya langsung
+        // kelihatan. Diambil dari kelas itu sendiri, bukan dari filterProdi/filterSemester form,
+        // karena keduanya opsional: admin bisa memilih kelas tanpa menyaring lebih dulu. Pola sama
+        // seperti App\Livewire\Admin\Kelas\Form::save(); search/page lama sengaja tidak dibawa.
+        return redirect()->route('admin.akademik.jadwal', array_filter([
+            'id_prodi' => $kelas?->id_prodi,
+            'id_semester' => $kelas?->id_semester,
+            'id_kelas' => $validated['id_kelas'],
+        ]));
     }
 
     /**

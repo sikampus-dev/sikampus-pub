@@ -120,7 +120,11 @@ it('creates several jadwal slots at once from jumlah_pertemuan', function () {
         ->set('is_active', true)
         ->call('addDosen', $dosen->id)
         ->call('save')
-        ->assertRedirect(route('admin.akademik.jadwal'));
+        ->assertRedirect(route('admin.akademik.jadwal', [
+            'id_prodi' => $kelas->id_prodi,
+            'id_semester' => $kelas->id_semester,
+            'id_kelas' => $kelas->id,
+        ]));
 
     $rows = Jadwal::where('id_kelas', $kelas->id)->orderBy('urutan_pertemuan')->get();
     expect($rows)->toHaveCount(3);
@@ -149,6 +153,34 @@ it('rejects create when a slot for the kelas and ruangan is already taken', func
     expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(1);
 });
 
+it('redirects to the index filtered by the new jadwal prodi, semester and kelas after create', function () {
+    // Filter diambil dari kelas yang dipilih, bukan dari filter lama Index (backUrl) — slot yang
+    // baru dibuat harus langsung kelihatan tanpa admin menyetel ulang filter.
+    $admin = adminUser();
+    $kelas = Kelas::factory()->create();
+
+    Livewire::withQueryParams(['page' => '3', 'search' => 'algoritma', 'id_semester' => '999'])
+        ->actingAs($admin)
+        ->test(Form::class)
+        ->set('id_kelas', $kelas->id)
+        ->set('jumlah_pertemuan', '1')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('admin.akademik.jadwal').'?id_prodi='.$kelas->id_prodi
+            .'&id_semester='.$kelas->id_semester.'&id_kelas='.$kelas->id);
+});
+
+it('restores the prodi, semester and kelas filters on the index from that redirect', function () {
+    $admin = adminUser();
+
+    Livewire::withQueryParams(['id_prodi' => '7', 'id_semester' => '8', 'id_kelas' => '9'])
+        ->actingAs($admin)
+        ->test(Index::class)
+        ->assertSet('filterProdi', '7')
+        ->assertSet('filterSemester', '8')
+        ->assertSet('filterKelas', '9');
+});
+
 it('lewatiPengecekanBentrok lets create skip the slot pre-check when id_ruangan is empty', function () {
     // Tanpa ruangan, constraint unique di database membolehkan baris kembar (MySQL memperlakukan
     // NULL sebagai berbeda dari NULL lain pada unique index) — jadi bypass ini benar-benar berhasil
@@ -164,7 +196,11 @@ it('lewatiPengecekanBentrok lets create skip the slot pre-check when id_ruangan 
         ->set('lewatiPengecekanBentrok', true)
         ->call('save')
         ->assertHasNoErrors()
-        ->assertRedirect(route('admin.akademik.jadwal'));
+        ->assertRedirect(route('admin.akademik.jadwal', [
+            'id_prodi' => $kelas->id_prodi,
+            'id_semester' => $kelas->id_semester,
+            'id_kelas' => $kelas->id,
+        ]));
 
     expect(Jadwal::where('id_kelas', $kelas->id)->count())->toBe(3);
 });
