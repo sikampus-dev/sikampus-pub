@@ -35,8 +35,8 @@
     @endif
 
     <div class="rounded-2xl bg-white shadow-border">
-        <div class="flex flex-wrap items-center gap-3 border-b border-neutral-200 p-4">
-            <div class="relative flex-1 min-w-[200px]">
+        <div class="space-y-4 border-b border-neutral-200 p-4">
+            <div class="relative">
                 <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden="true"></i>
                 <input
                     type="text"
@@ -45,13 +45,17 @@
                     class="w-full rounded-lg py-2 pl-9 pr-3 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"
                 />
             </div>
-            <div class="w-56">
-                <x-searchable-select
-                    model="idFakultas"
-                    :live="true"
-                    :options="$fakultasOptions"
-                    placeholder="Semua fakultas"
-                />
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                <div>
+                    <label class="mb-1 block text-xs font-semibold text-neutral-700">Fakultas</label>
+                    <x-searchable-select
+                        model="idFakultas"
+                        :live="true"
+                        :options="$fakultasOptions"
+                        placeholder="Semua fakultas"
+                    />
+                </div>
             </div>
         </div>
 

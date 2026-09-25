@@ -112,6 +112,7 @@
                 />
             </div>
             <div>
+                <label class="mb-1 block text-xs font-semibold text-neutral-700">Semester</label>
                 <x-searchable-select
                     model="filterSemester"
                     :options="$this->semesterOptions"

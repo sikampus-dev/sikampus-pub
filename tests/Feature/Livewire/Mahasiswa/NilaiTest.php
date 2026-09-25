@@ -165,3 +165,44 @@ it('streams a pdf download when exporting transkrip', function () {
         ->call('exportPdf')
         ->assertFileDownloaded();
 });
+
+it('orders nilai semester groups by kode, newest first, even when an older semester was created later', function () {
+    [$user, $mahasiswa] = nilaiMahasiswaUser();
+
+    // Semester paling lama sengaja dibuat terakhir sehingga id-nya paling besar; sort per id akan
+    // menaruhnya di puncak, sort per kode harus menempatkannya di dasar.
+    $baru = Semester::factory()->create(['kode' => '20252', 'nama' => 'Genap 2025']);
+    $tengah = Semester::factory()->create(['kode' => '20241', 'nama' => 'Ganjil 2024']);
+    $lama = Semester::factory()->create(['kode' => '20232', 'nama' => 'Genap 2023']);
+    expect($lama->id)->toBeGreaterThan($baru->id);
+
+    foreach ([$lama, $tengah, $baru] as $i => $semester) {
+        buatKrsDenganNilai($mahasiswa, $semester, ['kode' => 'IF10'.$i, 'sks' => 3], [
+            'angka_mutu' => 4, 'huruf_mutu' => 'A', 'is_final' => true,
+        ]);
+    }
+
+    $this->actingAs($user)->get(route('mahasiswa.nilai.semester'))
+        ->assertOk()
+        ->assertSeeInOrder(['Genap 2025', 'Ganjil 2024', 'Genap 2023']);
+});
+
+it('orders transkrip rows by semester kode, oldest first, regardless of semester id order', function () {
+    [$user, $mahasiswa] = nilaiMahasiswaUser();
+
+    $baru = Semester::factory()->create(['kode' => '20252', 'nama' => 'Genap 2025']);
+    $lama = Semester::factory()->create(['kode' => '20232', 'nama' => 'Genap 2023']);
+    expect($lama->id)->toBeGreaterThan($baru->id);
+
+    buatKrsDenganNilai($mahasiswa, $baru, ['kode' => 'IF900', 'nama' => 'Matkul Terbaru', 'sks' => 3], [
+        'angka_mutu' => 4, 'huruf_mutu' => 'A', 'is_final' => true,
+    ]);
+    buatKrsDenganNilai($mahasiswa, $lama, ['kode' => 'IF100', 'nama' => 'Matkul Terlama', 'sks' => 3], [
+        'angka_mutu' => 4, 'huruf_mutu' => 'A', 'is_final' => true,
+    ]);
+
+    // Transkrip urut menaik: semester terlama lebih dulu.
+    $this->actingAs($user)->get(route('mahasiswa.nilai.transkrip'))
+        ->assertOk()
+        ->assertSeeInOrder(['Matkul Terlama', 'Matkul Terbaru']);
+});

@@ -48,8 +48,8 @@
     @endif
 
     <div class="rounded-2xl bg-white shadow-border">
-        <div class="flex flex-wrap items-center gap-3 border-b border-neutral-200 p-4">
-            <div class="relative flex-1 min-w-[220px]">
+        <div class="space-y-4 border-b border-neutral-200 p-4">
+            <div class="relative">
                 <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden="true"></i>
                 <input
                     type="text"
@@ -58,33 +58,39 @@
                     class="w-full rounded-lg py-2 pl-9 pr-3 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"
                 />
             </div>
-            <div class="w-52">
-                <x-searchable-select
-                    model="filterNegara"
-                    :live="true"
-                    :options="$negaraOptions"
-                    placeholder="Semua negara"
-                />
-            </div>
-            <div class="w-52">
-                {{-- wire:key terikat filterNegara: lihat catatan yang sama di Kota\index.blade.php. --}}
-                <x-searchable-select
-                    wire:key="filter-provinsi-select-{{ $filterNegara }}"
-                    model="filterProvinsi"
-                    :live="true"
-                    :options="$provinsiOptions"
-                    placeholder="Semua provinsi"
-                />
-            </div>
-            <div class="w-52">
-                {{-- wire:key terikat filterNegara+filterProvinsi supaya opsi kota ikut termuat ulang. --}}
-                <x-searchable-select
-                    wire:key="filter-kota-select-{{ $filterNegara }}-{{ $filterProvinsi }}"
-                    model="filterKota"
-                    :live="true"
-                    :options="$kotaOptions"
-                    placeholder="Semua kota"
-                />
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                    <label class="mb-1 block text-xs font-semibold text-neutral-700">Negara</label>
+                    <x-searchable-select
+                        model="filterNegara"
+                        :live="true"
+                        :options="$negaraOptions"
+                        placeholder="Semua negara"
+                    />
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-semibold text-neutral-700">Provinsi</label>
+                    {{-- wire:key terikat filterNegara: lihat catatan yang sama di Kota\index.blade.php. --}}
+                    <x-searchable-select
+                        wire:key="filter-provinsi-select-{{ $filterNegara }}"
+                        model="filterProvinsi"
+                        :live="true"
+                        :options="$provinsiOptions"
+                        placeholder="Semua provinsi"
+                    />
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-semibold text-neutral-700">Kota</label>
+                    {{-- wire:key terikat filterNegara+filterProvinsi supaya opsi kota ikut termuat ulang. --}}
+                    <x-searchable-select
+                        wire:key="filter-kota-select-{{ $filterNegara }}-{{ $filterProvinsi }}"
+                        model="filterKota"
+                        :live="true"
+                        :options="$kotaOptions"
+                        placeholder="Semua kota"
+                    />
+                </div>
             </div>
         </div>
 

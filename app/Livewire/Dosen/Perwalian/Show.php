@@ -215,7 +215,7 @@ class Show extends Component
         }
 
         usort($mataKuliah, function (array $a, array $b) {
-            $cmp = $a['semester']->id <=> $b['semester']->id;
+            $cmp = $a['semester']->kode <=> $b['semester']->kode;
 
             return $cmp !== 0 ? $cmp : strcmp((string) $a['kode'], (string) $b['kode']);
         });

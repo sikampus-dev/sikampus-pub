@@ -236,6 +236,7 @@
                 <p class="text-sm text-neutral-500">Total tagihan, pembayaran, dan piutang berjalan</p>
             </div>
             <div class="w-full sm:w-56">
+                <label class="mb-1 block text-xs font-semibold text-neutral-700">Periode</label>
                 <x-searchable-select model="filterSemesterKeuangan" :options="$this->semesterOptionsKeuangan" :live="true" placeholder="Semua periode" />
             </div>
         </div>

@@ -198,3 +198,37 @@ it('has no edit or delete actions on the detail page', function () {
 it('redirects unauthenticated users to the login page', function () {
     $this->get(route('prodi.mahasiswa'))->assertRedirect(route('login'));
 });
+
+it('orders tagihan and nilai semester groups by kode, newest first, regardless of semester id order', function () {
+    $prodi = Prodi::factory()->create();
+    $mhs = Mahasiswa::factory()->create(['id_prodi' => $prodi->id]);
+
+    // Semester paling lama dibuat terakhir sehingga id-nya paling besar; sort per id akan salah.
+    $baru = Semester::factory()->create(['kode' => '20252', 'nama' => '2025 Genap']);
+    $tengah = Semester::factory()->create(['kode' => '20241', 'nama' => '2024 Ganjil']);
+    $lama = Semester::factory()->create(['kode' => '20232', 'nama' => '2023 Genap']);
+    expect($lama->id)->toBeGreaterThan($baru->id);
+
+    foreach ([$lama, $tengah, $baru] as $i => $semester) {
+        Tagihan::factory()->create([
+            'id_mahasiswa' => $mhs->id,
+            'id_semester' => $semester->id,
+            'total' => 1000000,
+            'no_tagihan' => 'TGH-URUT'.$i,
+        ]);
+
+        $matkul = Matkul::factory()->create(['id_prodi' => $prodi->id, 'sks' => 3]);
+        $km = KurikulumMatkul::factory()->create(['id_matkul' => $matkul->id, 'sks' => 3]);
+        $kelas = Kelas::factory()->create(['id_prodi' => $prodi->id, 'id_kurikulum_matkul' => $km->id, 'id_semester' => $semester->id]);
+        $krs = Krs::factory()->create(['id_mahasiswa' => $mhs->id, 'id_kelas' => $kelas->id, 'approved_at' => now()]);
+        Nilai::factory()->create(['id_krs' => $krs->id, 'angka_mutu' => 4, 'huruf_mutu' => 'A', 'is_final' => true]);
+    }
+
+    $component = Livewire::actingAs(kaprodiUser($prodi))->test(Show::class, ['id' => $mhs->id]);
+
+    $kodeTagihan = collect($component->instance()->tagihanBySemester())->pluck('semester.kode')->all();
+    expect($kodeTagihan)->toBe(['20252', '20241', '20232']);
+
+    $kodeNilai = collect($component->instance()->nilaiBySemester())->pluck('semester.kode')->all();
+    expect($kodeNilai)->toBe(['20252', '20241', '20232']);
+});

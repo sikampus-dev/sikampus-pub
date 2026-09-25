@@ -162,7 +162,7 @@ class Show extends Component
                     'ip' => $totalSksDenganNilai > 0 ? round($totalAngkaMutu / $totalSksDenganNilai, 2) : 0,
                 ];
             })
-            ->sortByDesc(fn ($group) => $group['semester']->id)
+            ->sortByDesc(fn ($group) => $group['semester']->kode)
             ->values();
     }
 

@@ -144,3 +144,22 @@ it('shows a call to action to create a ktm when the mahasiswa has none', functio
         ->assertOk()
         ->assertSee('Buat KTM');
 });
+
+it('orders the ip per semester chart by kode, oldest first, regardless of semester id order', function () {
+    [$user, $mahasiswa] = dashboardMahasiswaUser();
+
+    // Semester paling lama dibuat terakhir sehingga id-nya paling besar; sort per id akan
+    // menaruhnya di ujung kanan grafik, padahal seharusnya paling kiri.
+    $baru = Semester::factory()->create(['kode' => '20252', 'nama' => 'Genap 2025']);
+    $tengah = Semester::factory()->create(['kode' => '20241', 'nama' => 'Ganjil 2024']);
+    $lama = Semester::factory()->create(['kode' => '20232', 'nama' => 'Genap 2023']);
+    expect($lama->id)->toBeGreaterThan($baru->id);
+
+    foreach ([$lama, $tengah, $baru] as $semester) {
+        nilaiKrsUntukDashboard($mahasiswa, $semester, ['angka_mutu' => 4, 'is_final' => true]);
+    }
+
+    $chart = Livewire::actingAs($user)->test(Dashboard::class)->instance()->ipPerSemester();
+
+    expect(array_map(fn ($row) => $row['semester']->kode, $chart))->toBe(['20232', '20241', '20252']);
+});

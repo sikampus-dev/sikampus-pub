@@ -104,7 +104,8 @@ class Semester extends Component
         }
         unset($row);
 
-        usort($transkripData, fn ($a, $b) => $b['semester']->id <=> $a['semester']->id);
+        // Terbaru dulu per kode semester, bukan id — id hanya urutan pembuatan baris.
+        usort($transkripData, fn ($a, $b) => $b['semester']->kode <=> $a['semester']->kode);
 
         return [
             'transkrip' => array_values($transkripData),

@@ -1839,7 +1839,7 @@ class NilaiController extends Controller
 
         // Sort berdasarkan semester (terbaru dulu)
         usort($nilaiBySemester, function ($a, $b) {
-            return $b['semester']['id'] <=> $a['semester']['id'];
+            return $b['semester']['kode'] <=> $a['semester']['kode'];
         });
 
         return response()->json([
@@ -1965,7 +1965,7 @@ class NilaiController extends Controller
         unset($semesterData);
 
         usort($nilaiBySemester, function ($a, $b) {
-            return $b['semester']['id'] <=> $a['semester']['id'];
+            return $b['semester']['kode'] <=> $a['semester']['kode'];
         });
 
         return response()->json([
@@ -2748,7 +2748,7 @@ class NilaiController extends Controller
 
         // Sort berdasarkan semester (terbaru dulu)
         usort($transkripData, function ($a, $b) {
-            return $b['semester']['id'] <=> $a['semester']['id'];
+            return $b['semester']['kode'] <=> $a['semester']['kode'];
         });
 
         return response()->json([
@@ -2869,7 +2869,7 @@ class NilaiController extends Controller
 
         // Semester terbaru di halaman pertama, sama dengan urutan di layar.
         usort($perSemester, function ($a, $b) {
-            return $b['semester']->id <=> $a['semester']->id;
+            return $b['semester']->kode <=> $a['semester']->kode;
         });
 
         $ipKumulatif = $totalSksDenganNilai > 0
@@ -3045,7 +3045,7 @@ class NilaiController extends Controller
 
         // Sort berdasarkan semester (terlama dulu untuk grafik)
         usort($result, function ($a, $b) {
-            return $a['semester']['id'] <=> $b['semester']['id'];
+            return $a['semester']['kode'] <=> $b['semester']['kode'];
         });
 
         return response()->json([
@@ -3140,7 +3140,7 @@ class NilaiController extends Controller
         // Di dalam satu semester, urut berdasarkan nama mata kuliah (bukan kodenya) supaya
         // konsisten dengan daftar nilai/KRS di seluruh aplikasi.
         usort($mataKuliahList, function ($a, $b) {
-            $cmp = ($a['semester']['id'] ?? 0) <=> ($b['semester']['id'] ?? 0);
+            $cmp = ($a['semester']['kode'] ?? '') <=> ($b['semester']['kode'] ?? '');
             if ($cmp !== 0) {
                 return $cmp;
             }

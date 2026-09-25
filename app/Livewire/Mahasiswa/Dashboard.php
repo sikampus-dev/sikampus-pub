@@ -153,7 +153,9 @@ class Dashboard extends Component
             ];
         }
 
-        usort($result, fn ($a, $b) => $a['semester']->id <=> $b['semester']->id);
+        // Terlama dulu (grafik dibaca kiri ke kanan) per kode semester, bukan id — id hanya
+        // urutan pembuatan baris, sehingga semester lama yang diinput belakangan tampil salah.
+        usort($result, fn ($a, $b) => $a['semester']->kode <=> $b['semester']->kode);
 
         return $result;
     }

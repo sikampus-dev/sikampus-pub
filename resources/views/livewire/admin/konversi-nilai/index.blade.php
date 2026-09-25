@@ -37,6 +37,7 @@
                 />
             </div>
             <div>
+                <label class="mb-1 block text-xs font-semibold text-neutral-700">Prodi</label>
                 <x-searchable-select
                     model="filterProdi"
                     :options="$this->prodiOptions"

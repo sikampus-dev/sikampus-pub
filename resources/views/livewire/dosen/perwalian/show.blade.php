@@ -209,6 +209,7 @@
                 <h3 class="text-sm font-semibold text-neutral-900">Catatan bimbingan</h3>
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <div class="w-full sm:w-72">
+                        <label class="mb-1 block text-xs font-semibold text-neutral-700">Semester</label>
                         <x-searchable-select model="filterSemesterCatatan" :options="$this->semesterOptions" :live="true" placeholder="Semua semester" />
                     </div>
                     <button

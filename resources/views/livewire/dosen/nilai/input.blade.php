@@ -41,6 +41,7 @@
 
     <div class="flex flex-wrap items-center justify-end gap-3">
         <div class="w-full sm:w-72">
+            <label class="mb-1 block text-xs font-semibold text-neutral-700">Jenis Penilaian</label>
             <x-searchable-select
                 model="selectedJenisPenilaianId"
                 :options="$jenisManual->mapWithKeys(fn ($jp) => [$jp['id'] => $jp['nama'].' ('.$jp['bobot'].'%)'])->all()"

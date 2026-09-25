@@ -1661,7 +1661,7 @@ class TagihanController extends Controller
         }
 
         usort($bySemester, function ($a, $b) {
-            return $b['semester']['id'] <=> $a['semester']['id'];
+            return $b['semester']['kode'] <=> $a['semester']['kode'];
         });
 
         return response()->json([

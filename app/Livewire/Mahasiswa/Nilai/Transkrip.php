@@ -87,7 +87,7 @@ class Transkrip extends Component
         }
 
         usort($mataKuliahList, function (array $a, array $b) {
-            $cmp = $a['semester']->id <=> $b['semester']->id;
+            $cmp = $a['semester']->kode <=> $b['semester']->kode;
 
             return $cmp !== 0 ? $cmp : strcmp((string) $a['matkul']->kode, (string) $b['matkul']->kode);
         });

@@ -50,6 +50,7 @@
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 p-4">
             <h3 class="text-sm font-semibold text-neutral-900">Catatan Bimbingan</h3>
             <div class="w-full sm:w-64">
+                <label class="mb-1 block text-xs font-semibold text-neutral-700">Semester</label>
                 <x-searchable-select
                     model="filterSemester"
                     :live="true"

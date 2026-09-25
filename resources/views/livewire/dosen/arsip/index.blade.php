@@ -37,6 +37,7 @@
         </div>
 
         <div class="w-full sm:w-64">
+            <label class="mb-1 block text-xs font-semibold text-neutral-700">Semester</label>
             <x-searchable-select model="filterSemester" :options="$this->semesterOptions" :live="true" placeholder="Semua semester" />
         </div>
     </div>
