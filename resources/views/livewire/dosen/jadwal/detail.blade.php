@@ -96,6 +96,10 @@
                 <i data-lucide="user" class="h-4 w-4 text-neutral-400" aria-hidden="true"></i>
                 Dosen: {{ $jadwal->dosen->map(fn ($jd) => $jd->dosen?->nama)->filter()->implode(', ') ?: '-' }}
             </span>
+            <span class="inline-flex items-center gap-1.5">
+                <i data-lucide="users" class="h-4 w-4 text-neutral-400" aria-hidden="true"></i>
+                Peserta (KRS disetujui): <span class="font-semibold text-neutral-800">{{ $this->jumlahMahasiswa }}</span>
+            </span>
         </div>
     </div>
 

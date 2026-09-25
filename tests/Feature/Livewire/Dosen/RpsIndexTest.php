@@ -50,3 +50,15 @@ it('filters by the selected semester', function () {
     $component->set('filterSemester', '');
     expect($component->instance()->rows())->toHaveCount(2);
 });
+
+it('links each row to the pdf export', function () {
+    $dosenUser = dosenUser();
+    $dosen = Dosen::where('id_user', $dosenUser->id)->firstOrFail();
+    $kelas = Kelas::factory()->create();
+    KelasDosen::create(['id_dosen' => $dosen->id, 'id_kelas' => $kelas->id, 'is_pic' => true]);
+
+    $this->actingAs($dosenUser)
+        ->get(route('dosen.rps'))
+        ->assertOk()
+        ->assertSee(route('dosen.rps.pdf', $kelas->id), false);
+});

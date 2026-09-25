@@ -52,31 +52,31 @@
     @if ($activeTab === 'info')
         <div class="rounded-2xl bg-white p-6 shadow-border">
             <form wire:submit="saveInfo" class="space-y-5">
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Deskripsi Mata Kuliah</label>
+                    <textarea wire:model="deskripsi_matkul" rows="4" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Deskripsi Mata Kuliah (EN)</label>
+                    <textarea wire:model="deskripsi_matkul_en" rows="4" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
+                </div>    
+                <div class="sm:col-span-2">
+                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Materi Kuliah</label>
+                    <textarea wire:model="materi_kuliah" rows="3" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Model Pembelajaran</label>
+                    <textarea wire:model="model_pembelajaran" rows="2" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Pustaka Utama</label>
+                    <textarea wire:model="pustaka_utama" rows="3" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-neutral-700">Pustaka Pendukung</label>
+                    <textarea wire:model="pustaka_pendukung" rows="3" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
+                </div>
                 <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Deskripsi Mata Kuliah</label>
-                        <textarea wire:model="deskripsi_matkul" rows="4" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Deskripsi Mata Kuliah (EN)</label>
-                        <textarea wire:model="deskripsi_matkul_en" rows="4" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Materi Kuliah</label>
-                        <textarea wire:model="materi_kuliah" rows="3" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Model Pembelajaran</label>
-                        <textarea wire:model="model_pembelajaran" rows="2" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Pustaka Utama</label>
-                        <textarea wire:model="pustaka_utama" rows="3" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-neutral-700">Pustaka Pendukung</label>
-                        <textarea wire:model="pustaka_pendukung" rows="3" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border"></textarea>
-                    </div>
                     <div>
                         <label class="mb-1.5 block text-sm font-medium text-neutral-700">Media Perangkat Lunak</label>
                         <input type="text" wire:model="media_perangkat_lunak" class="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border" />

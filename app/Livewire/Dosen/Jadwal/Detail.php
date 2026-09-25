@@ -154,6 +154,20 @@ class Detail extends Component
     }
 
     /**
+     * Sama persis dengan App\Livewire\Dosen\Jadwal\Show::jumlahMahasiswa — jumlah mahasiswa
+     * dengan KRS disetujui untuk kelas ini (bukan cuma slot jadwal ini, karena peserta kelas
+     * berlaku untuk semua slotnya).
+     */
+    #[Computed]
+    public function jumlahMahasiswa(): int
+    {
+        return Krs::where('id_kelas', $this->kelasId)
+            ->whereNotNull('approved_at')
+            ->whereNull('deleted_at')
+            ->count();
+    }
+
+    /**
      * Semua baris perkuliahan untuk slot jadwal ini — dasar bagi sesiAktif/perkuliahanTerakhirSlot/
      * perkuliahanUntukKehadiran di bawah, supaya tidak query berkali-kali.
      */

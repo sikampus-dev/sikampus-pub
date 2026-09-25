@@ -74,6 +74,24 @@ it('returns 404 when the jadwal does not belong to the given kelasId', function 
         ->assertStatus(404);
 });
 
+it('shows the approved krs count as jumlah mahasiswa on the detail card', function () {
+    $dosenUser = dosenUser();
+    $dosen = Dosen::where('id_user', $dosenUser->id)->firstOrFail();
+    $kelas = Kelas::factory()->create();
+    $jadwal = Jadwal::factory()->create(['id_kelas' => $kelas->id]);
+    KelasDosen::create(['id_dosen' => $dosen->id, 'id_kelas' => $kelas->id, 'is_pic' => true]);
+
+    $mhsDisetujui = Mahasiswa::factory()->create();
+    Krs::factory()->create(['id_mahasiswa' => $mhsDisetujui->id, 'id_kelas' => $kelas->id, 'approved_at' => now()]);
+    $mhsBelumDisetujui = Mahasiswa::factory()->create();
+    Krs::factory()->create(['id_mahasiswa' => $mhsBelumDisetujui->id, 'id_kelas' => $kelas->id, 'approved_at' => null]);
+
+    $component = Livewire::actingAs($dosenUser)->test(Detail::class, ['kelasId' => $kelas->id, 'jadwalId' => $jadwal->id]);
+
+    expect($component->instance()->jumlahMahasiswa())->toBe(1);
+    $component->assertSee('Peserta (KRS disetujui)')->assertSee('1');
+});
+
 it('updates hari, tanggal, ruangan, and jenis kuliah for the pic dosen', function () {
     $dosenUser = dosenUser();
     $dosen = Dosen::where('id_user', $dosenUser->id)->firstOrFail();

@@ -54,10 +54,16 @@
                                 </td>
                                 <td class="px-6 py-4 text-neutral-600">{{ $kelas->semester?->nama ?? '—' }}</td>
                                 <td class="px-6 py-4 text-center">
-                                    <a href="{{ route('dosen.rps.show', $kelas->id) }}" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-neutral-700 shadow-border hover:bg-neutral-50">
-                                        <i data-lucide="clipboard-list" class="h-3.5 w-3.5" aria-hidden="true"></i>
-                                        Kelola RPS
-                                    </a>
+                                    <div class="inline-flex items-center gap-2">
+                                        <a href="{{ route('dosen.rps.show', $kelas->id) }}" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-neutral-700 shadow-border hover:bg-neutral-50">
+                                            <i data-lucide="clipboard-list" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                            Kelola RPS
+                                        </a>
+                                        <a href="{{ route('dosen.rps.pdf', $kelas->id) }}" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-neutral-700 shadow-border hover:bg-neutral-50" title="Unduh RPS sebagai PDF">
+                                            <i data-lucide="file-down" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                            PDF
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         @endforeach

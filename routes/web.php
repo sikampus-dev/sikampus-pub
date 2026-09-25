@@ -25,6 +25,7 @@ use App\Http\Controllers\Web\KrsCetakController;
 use App\Http\Controllers\Web\LoginController;
 use App\Http\Controllers\Web\MahasiswaExportController;
 use App\Http\Controllers\Web\NilaiExportController;
+use App\Http\Controllers\Web\RpsCetakController;
 use App\Http\Controllers\Web\SuperadminEnvConfigController;
 use App\Http\Controllers\Web\SuperadminMigrasiController;
 use App\Http\Controllers\Web\SuperadminTestUploadController;
@@ -312,6 +313,7 @@ Route::middleware(['auth', 'role.dosen.web'])->group(function (): void {
     // Rute literal ('/dosen/rps') harus di atas rute berparameter ('{kelasId}').
     Route::livewire('/dosen/rps', DosenRpsIndex::class)->name('dosen.rps');
     Route::livewire('/dosen/rps/{kelasId}', DosenRpsShow::class)->name('dosen.rps.show');
+    Route::get('/dosen/rps/{kelasId}/pdf', [RpsCetakController::class, 'show'])->name('dosen.rps.pdf');
 
     Route::livewire('/dosen/krs', DosenKrsIndex::class)->name('dosen.krs');
 
