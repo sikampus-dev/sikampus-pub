@@ -35,7 +35,7 @@
     @endif
 
     <div class="w-full sm:w-72">
-        <label class="mb-1.5 block text-xs font-medium text-neutral-500">Semester</label>
+        <label class="mb-1 block text-xs font-semibold text-neutral-700">Semester</label>
         <x-searchable-select
             model="filterSemester"
             :options="$this->semesterOptions"

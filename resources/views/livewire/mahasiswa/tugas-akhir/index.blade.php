@@ -84,11 +84,11 @@
         </div>
         <div class="flex flex-wrap gap-3">
             <div class="min-w-[160px] flex-1">
-                <label class="mb-1 block text-xs font-medium text-neutral-600">Status</label>
+                <label class="mb-1 block text-xs font-semibold text-neutral-700">Status</label>
                 <x-searchable-select model="filterStatus" :options="$this->statusOptions" :live="true" :clearable="false" />
             </div>
             <div class="min-w-[200px] flex-1">
-                <label class="mb-1 block text-xs font-medium text-neutral-600">Semester</label>
+                <label class="mb-1 block text-xs font-semibold text-neutral-700">Semester</label>
                 <x-searchable-select
                     model="filterSemester"
                     :options="$this->semesterOptions"

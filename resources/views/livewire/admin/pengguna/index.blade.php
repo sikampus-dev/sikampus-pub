@@ -59,20 +59,21 @@
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                     <label class="mb-1 block text-xs font-semibold text-neutral-700">Tipe Akun</label>
-                    <select wire:model.live="filterRole" class="w-full rounded-lg px-3 py-2 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border">
-                        <option value="">Semua Tipe</option>
-                        @foreach ($roleLabels as $value => $label)
-                            <option value="{{ $value }}">{{ $label }}</option>
-                        @endforeach
-                    </select>
+                    <x-searchable-select
+                        model="filterRole"
+                        :live="true"
+                        :options="$roleLabels"
+                        placeholder="Semua Tipe"
+                    />
                 </div>
                 <div>
                     <label class="mb-1 block text-xs font-semibold text-neutral-700">Status</label>
-                    <select wire:model.live="filterStatus" class="w-full rounded-lg px-3 py-2 text-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 shadow-border">
-                        <option value="">Semua Status</option>
-                        <option value="active">Aktif</option>
-                        <option value="inactive">Tidak Aktif</option>
-                    </select>
+                    <x-searchable-select
+                        model="filterStatus"
+                        :live="true"
+                        :options="['active' => 'Aktif', 'inactive' => 'Tidak Aktif']"
+                        placeholder="Semua Status"
+                    />
                 </div>
             </div>
 
